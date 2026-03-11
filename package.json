@@ -1,6 +1,6 @@
 {
   "name": "reforge-ai",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Raw LLM output reforged into clean data. Zero-latency deterministic validation and native JSON repair.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,6 +15,36 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./openai-compatible": {
+      "import": {
+        "types": "./dist/providers/openai-compatible.d.ts",
+        "default": "./dist/providers/openai-compatible.js"
+      },
+      "require": {
+        "types": "./dist/providers/openai-compatible.d.cts",
+        "default": "./dist/providers/openai-compatible.cjs"
+      }
+    },
+    "./anthropic": {
+      "import": {
+        "types": "./dist/providers/anthropic.d.ts",
+        "default": "./dist/providers/anthropic.js"
+      },
+      "require": {
+        "types": "./dist/providers/anthropic.d.cts",
+        "default": "./dist/providers/anthropic.cjs"
+      }
+    },
+    "./google": {
+      "import": {
+        "types": "./dist/providers/google.d.ts",
+        "default": "./dist/providers/google.js"
+      },
+      "require": {
+        "types": "./dist/providers/google.d.cts",
+        "default": "./dist/providers/google.cjs"
       }
     }
   },
@@ -64,10 +94,22 @@
     "node": ">=16.0.0"
   },
   "peerDependencies": {
-    "zod": "^3.22.0"
+    "zod": "^3.22.0",
+    "openai": "^4.0.0",
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@google/generative-ai": "^0.21.0"
   },
   "peerDependenciesMeta": {
     "zod": {
+      "optional": true
+    },
+    "openai": {
+      "optional": true
+    },
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/generative-ai": {
       "optional": true
     }
   },

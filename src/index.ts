@@ -45,10 +45,21 @@
  */
 
 export { guard } from "./guard.js";
+export { forge } from "./providers/forge.js";
 export type {
   GuardResult,
   GuardSuccess,
   GuardFailure,
   TelemetryData,
 } from "./types.js";
+export type {
+  Message,
+  ProviderCallOptions,
+  ReforgeProvider,
+  ForgeOptions,
+  ForgeTelemetry,
+  ForgeResult,
+  ForgeSuccess,
+  ForgeFailure,
+} from "./providers/types.js";
 

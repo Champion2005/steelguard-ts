@@ -1,30 +1,23 @@
-import { useState, useRef, useEffect } from 'react'
-import { Play, RotateCcw, ChevronDown, CheckCircle2, XCircle, Clock, Sparkles } from 'lucide-react'
-import { demoPresets } from './demo-presets'
+import { useState } from 'react'
+import { Play, RotateCcw, CheckCircle2, XCircle, Clock, Sparkles, Wrench, X, Grid3x3 } from 'lucide-react'
+import { demoPresets, type DemoPreset } from './demo-presets'
 
 const presets = demoPresets
+
+/* The 3 initially-visible preset keys */
+const initialPresetKeys = ['validationFailure', 'combined', 'typeCoercion'] as const
 
 type GuardResultAny =
   | { success: true; data: unknown; telemetry: { durationMs: number; status: string }; isRepaired: boolean }
   | { success: false; retryPrompt: string; errors: Array<{ path: (string | number)[]; message: string }>; telemetry: { durationMs: number; status: string } }
 
 export default function Demo() {
-  const [input, setInput] = useState(presets.markdown.input)
-  const [schema, setSchema] = useState(presets.markdown.schema)
+  const [input, setInput] = useState(presets.validationFailure.input)
+  const [schema, setSchema] = useState(presets.validationFailure.schema)
   const [result, setResult] = useState<GuardResultAny | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+  const [activePreset, setActivePreset] = useState<DemoPreset | null>(presets.validationFailure)
+  const [overlayOpen, setOverlayOpen] = useState(false)
 
   const loadPreset = (key: string) => {
     const preset = presets[key]
@@ -32,7 +25,8 @@ export default function Demo() {
     setSchema(preset.schema)
     setResult(null)
     setError(null)
-    setDropdownOpen(false)
+    setActivePreset(preset)
+    setOverlayOpen(false)
   }
 
   const runGuard = async () => {
@@ -54,17 +48,28 @@ export default function Demo() {
   }
 
   const reset = () => {
-    setInput(presets.markdown.input)
-    setSchema(presets.markdown.schema)
+    setInput(presets.validationFailure.input)
+    setSchema(presets.validationFailure.schema)
     setResult(null)
     setError(null)
+    setActivePreset(presets.validationFailure)
+  }
+
+  const handleInputChange = (val: string) => {
+    setInput(val)
+    setActivePreset(null)
+  }
+
+  const handleSchemaChange = (val: string) => {
+    setSchema(val)
+    setActivePreset(null)
   }
 
   return (
-    <section className="px-4 py-12 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-6xl">
+    <section className="px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto max-w-7xl">
         {/* Header */}
-        <div className="mb-12 text-center">
+        <div className="mb-8 text-center">
           <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">
             Playground
           </p>
@@ -77,33 +82,47 @@ export default function Demo() {
           </p>
         </div>
 
+        {/* Example cards grid */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Try an example
+            </span>
+            <button
+              onClick={() => setOverlayOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              <Grid3x3 className="h-3 w-3" />
+              View all examples
+            </button>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {initialPresetKeys.map((key) => {
+              const preset = presets[key]
+              return (
+                <button
+                  key={key}
+                  onClick={() => loadPreset(key)}
+                  className={`group rounded-xl border p-4 text-left transition-all duration-150 ${
+                    activePreset === preset
+                      ? 'border-primary/50 bg-primary/5'
+                      : 'border-border/60 bg-card/30 hover:border-border hover:bg-card/50'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                    {preset.label}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {preset.desc}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Toolbar */}
         <div className="mb-5 flex flex-wrap items-center gap-2">
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-border/60 bg-card/50 px-3.5 text-sm font-medium text-foreground transition-all duration-150 hover:border-border hover:bg-card"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              Examples
-              <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-150 ${dropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {dropdownOpen && (
-              <div className="absolute left-0 top-full z-20 mt-1.5 w-64 overflow-hidden rounded-xl border border-border/60 bg-card shadow-xl shadow-black/30">
-                {Object.entries(presets).map(([key, preset]) => (
-                  <button
-                    key={key}
-                    onClick={() => loadPreset(key)}
-                    className="block w-full px-4 py-2.5 text-left transition-colors duration-100 hover:bg-muted"
-                  >
-                    <span className="block text-sm font-medium text-foreground">{preset.label}</span>
-                    <span className="block text-xs text-muted-foreground">{preset.desc}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           <button
             onClick={runGuard}
             className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm shadow-primary/20 transition-all duration-150 hover:brightness-110"
@@ -132,10 +151,9 @@ export default function Demo() {
               </label>
               <textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                rows={10}
+                onChange={(e) => handleInputChange(e.target.value)}
                 spellCheck={false}
-                className="w-full resize-none rounded-xl border border-border/60 bg-[oklch(0.13_0.005_286)] p-4 font-mono text-[13px] leading-6 text-foreground/85 placeholder:text-muted-foreground/40 transition-colors duration-150 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                className="h-[30vh] min-h-40 max-h-[40vh] w-full resize-none overflow-y-auto rounded-xl border border-border/60 bg-[oklch(0.13_0.005_286)] p-4 font-mono text-[13px] leading-6 text-foreground/85 placeholder:text-muted-foreground/40 transition-colors duration-150 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 placeholder="Paste your LLM output here..."
               />
             </div>
@@ -146,22 +164,21 @@ export default function Demo() {
               </label>
               <textarea
                 value={schema}
-                onChange={(e) => setSchema(e.target.value)}
-                rows={6}
+                onChange={(e) => handleSchemaChange(e.target.value)}
                 spellCheck={false}
-                className="w-full resize-none rounded-xl border border-border/60 bg-[oklch(0.13_0.005_286)] p-4 font-mono text-[13px] leading-6 text-foreground/85 placeholder:text-muted-foreground/40 transition-colors duration-150 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                className="h-[18vh] min-h-30 max-h-[25vh] w-full resize-none overflow-y-auto rounded-xl border border-border/60 bg-[oklch(0.13_0.005_286)] p-4 font-mono text-[13px] leading-6 text-foreground/85 placeholder:text-muted-foreground/40 transition-colors duration-150 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 placeholder="z.object({ ... })"
               />
             </div>
           </div>
 
-          {/* Output side */}
+          {/* Output side — single result box */}
           <div>
             <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
               Result
             </label>
-            <div className="min-h-[376px] rounded-xl border border-border/60 bg-[oklch(0.13_0.005_286)] p-5">
+            <div className="h-[calc(30vh+18vh+1.5rem)] min-h-75 max-h-[calc(40vh+25vh+1.5rem)] overflow-y-auto rounded-xl border border-border/60 bg-[oklch(0.13_0.005_286)] p-5">
               {error && (
                 <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3.5">
                   <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
@@ -170,7 +187,7 @@ export default function Demo() {
               )}
 
               {!result && !error && (
-                <div className="flex h-full min-h-[336px] flex-col items-center justify-center text-center">
+                <div className="flex h-full min-h-65 flex-col items-center justify-center text-center">
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
                     <Play className="h-5 w-5 text-muted-foreground" />
                   </div>
@@ -203,6 +220,24 @@ export default function Demo() {
                       {result.telemetry.durationMs.toFixed(2)}ms
                     </span>
                   </div>
+
+                  {/* Corrections — inside the result box */}
+                  {activePreset?.corrections && activePreset.corrections.length > 0 && (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5">
+                      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-primary/70">
+                        <Wrench className="h-3 w-3" />
+                        What Reforge Fixed
+                      </div>
+                      <div className="space-y-1.5">
+                        {activePreset.corrections.map((c, i) => (
+                          <div key={i} className="flex items-start gap-2 text-sm">
+                            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
+                            <span className="text-foreground/80">{c.description}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Data */}
                   {result.success && (
@@ -262,6 +297,43 @@ export default function Demo() {
           </div>
         </div>
       </div>
+
+      {/* All examples overlay */}
+      {overlayOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative mx-4 max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border/60 bg-background p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-foreground">All Examples</h2>
+              <button
+                onClick={() => setOverlayOpen(false)}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {Object.entries(presets).map(([key, preset]) => (
+                <button
+                  key={key}
+                  onClick={() => loadPreset(key)}
+                  className={`rounded-xl border p-4 text-left transition-all duration-150 ${
+                    activePreset === preset
+                      ? 'border-primary/50 bg-primary/5'
+                      : 'border-border/60 bg-card/30 hover:border-border hover:bg-card/50'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold text-foreground">
+                    {preset.label}
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {preset.desc}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

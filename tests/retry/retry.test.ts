@@ -22,12 +22,19 @@ describe("generateRetryPrompt", () => {
     expect(prompt).toContain("schema is still in your context");
   });
 
-  it("truncates long raw snippets to 300 characters", () => {
+  it("omits snippet entirely when raw output exceeds 300 characters", () => {
     const raw = "x".repeat(400);
     const prompt = generateRetryPrompt([], raw);
-    expect(prompt).toContain("x".repeat(300));
-    expect(prompt).toContain("…");
-    expect(prompt.length).toBeLessThan(450);
+    expect(prompt).toContain("could not be parsed as JSON");
+    expect(prompt).not.toContain("Got:");
+    expect(prompt).not.toContain("x".repeat(10));
+  });
+
+  it("includes snippet when raw output fits within 300 characters", () => {
+    const raw = "{bad json here}";
+    const prompt = generateRetryPrompt([], raw);
+    expect(prompt).toContain("Got:");
+    expect(prompt).toContain("{bad json here}");
   });
 
   it("treats empty string rawSnippet as no snippet", () => {

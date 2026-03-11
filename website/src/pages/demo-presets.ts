@@ -1,278 +1,145 @@
 /**
  * Demo presets with realistic AI-generated JSON outputs.
- * Each includes common LLM repair challenges.
+ * Each includes common LLM repair challenges and correction annotations.
  */
 
-export const demoPresets: Record<string, { label: string; desc: string; input: string; schema: string }> = {
-  product: {
-    label: 'Product Extraction',
-    desc: 'E-commerce AI analysis with enrichment',
-    input: `{
-  "productId": "SKU-47291",
-  "title": "Premium Wireless Noise-Canceling Headphones",
-  "category": "Electronics > Audio",
-  "price": "299.99",
-  "currency": "USD",
-  "rating": 4.7,
-  "reviewCount": "1240",
-  "inStock": "true",
-  "specs": {
-    "batteryLife": "30 hours",
-    "weight": "250g",
-    "drivers": "40mm",
-    connectivity: ["Bluetooth 5.2", "3.5mm Jack"],  
-    "waterproof": "IPX4",
-  },
-  "extractedFeatures": [
-    "Active Noise Cancellation",
-    "Comfort Fit",
-    "Long Battery",
-    "Wireless Connection",
-  ],
-  "sentiment": "positive",
-  "avgReviewLength": 85.5,
-  "commonComplaint": null,
-  "marketAnalysis": {
-    "competitors": "4",
-    "pricePosition": "mid-premium",
-    "demandTrend": "rising"
-  },
-  "recommendedPrice": $279.99,
-  "buyersAlsoViewed": ["Case-001", "AuxCable-45"]
-}`,
-    schema: `z.object({
-  productId: z.string(),
-  title: z.string(),
-  category: z.string(),
-  price: z.number(),
-  currency: z.string(),
-  rating: z.number(),
-  reviewCount: z.number(),
-  inStock: z.boolean(),
-  specs: z.object({
-    batteryLife: z.string(),
-    weight: z.string(),
-    drivers: z.string(),
-    connectivity: z.array(z.string()),
-    waterproof: z.string(),
-  }),
-  extractedFeatures: z.array(z.string()),
-  sentiment: z.enum(['positive', 'neutral', 'negative']),
-  avgReviewLength: z.number(),
-  commonComplaint: z.string().nullable(),
-  marketAnalysis: z.object({
-    competitors: z.number(),
-    pricePosition: z.string(),
-    demandTrend: z.string(),
-  }),
-  recommendedPrice: z.number(),
-  buyersAlsoViewed: z.array(z.string()),
-})`,
-  },
+export interface DemoCorrection {
+  description: string
+  before?: string
+  after?: string
+}
 
-  content: {
-    label: 'Content Analysis',
-    desc: 'Article summarization & metadata extraction',
-    input: `{
-  "url": "https://example.com/articles/ai-trends-2025",
-  "headline": "Top 5 AI Trends Shaping 2025",
-  "publishDate": "2025-03-11",
-  "author": "Jane Chen",
-  "wordCount": 3847,
-  "readTime": "12",
-  "category": ["Technology", "AI", "Trends"],
-  "summary": "This article explores the five most significant AI trends expected to dominate 2025: multimodal models, edge AI, AI safety frameworks, enterprise integration, and constitutional AI. The piece emphasizes the shift toward practical, deployable solutions rather than research-only advances.",
-  "keyTakeaways": [
-    "Multimodal AI is becoming the standard for enterprise applications",
-    "Edge inference is critical for latency-sensitive operations",
-    "Safety and alignment are now table stakes for any serious AI deployment",
-  ],
-  "sentiment": "informative",
-  "tone": "professional",
-  "estimatedReach": "50000",
-  "seoScore": "87",
-  "suggestedTags": [multimodal, "edge-computing", "AI-safety", "2025-trends"],
-  "relatedArticles": ["ai-alignment-guide", "edge-inference-benchmarks"],
-  "engagement": {avgShareCount: "240", "avgCommentSentiment": "positive"},
-  "confidenceScore": "0.94"
-}`,
-    schema: `z.object({
-  url: z.string().url(),
-  headline: z.string(),
-  publishDate: z.string(),
-  author: z.string(),
-  wordCount: z.number(),
-  readTime: z.number(),
-  category: z.array(z.string()),
-  summary: z.string(),
-  keyTakeaways: z.array(z.string()),
-  sentiment: z.string(),
-  tone: z.string(),
-  estimatedReach: z.number(),
-  seoScore: z.number(),
-  suggestedTags: z.array(z.string()),
-  relatedArticles: z.array(z.string()),
-  engagement: z.object({
-    avgShareCount: z.number(),
-    avgCommentSentiment: z.string(),
-  }),
-  confidenceScore: z.number().min(0).max(1),
-})`,
-  },
+export interface DemoPreset {
+  label: string
+  desc: string
+  input: string
+  schema: string
+  corrections?: DemoCorrection[]
+}
 
-  entities: {
-    label: 'Entity Extraction',
-    desc: 'NLP: people, organizations, relationships',
-    input: `{
-  "sourceText": "Sarah Johnson from Acme Corp met with David Lee at OpenAI on March 10th to discuss partnership opportunities.",
-  "entities": [
-    {type: "PERSON", "value": "Sarah Johnson", "confidence": 0.98, "roles": ["executive"]},
-    {type: "PERSON", "value": "David Lee", "confidence": "0.96", "roles": ["researcher"]},
-    {type: "ORG", "value": "Acme Corp", "confidence": 0.99},
-    {type: "ORG", "value": "OpenAI", "confidence": "0.98"},
-    {type: "DATE", "value": "2025-03-10", "confidence": 0.95,},
-  ],
-  "relationships": [
-    {subject: "Sarah Johnson", "predicate": "works_at", object: "Acme Corp"},
-    {subject: "David Lee", "predicate": "works_at", "object": "OpenAI",},
-    {subject: "Sarah Johnson", "predicate": "met_with", "object": "David Lee"},
-  ],
-  "extractedKeywords": ["partnership", "opportunities", "discussion",],
-  "topicCluster": "business-development",
-  "sentiment": "neutral",
-  "language": "en",
-  "qualityScore": "0.92"
-}`,
-    schema: `z.object({
-  sourceText: z.string(),
-  entities: z.array(z.object({
-    type: z.string(),
-    value: z.string(),
-    confidence: z.number().min(0).max(1),
-    roles: z.array(z.string()),
-  })),
-  relationships: z.array(z.object({
-    subject: z.string(),
-    predicate: z.string(),
-    object: z.string(),
-  })),
-  extractedKeywords: z.array(z.string()),
-  topicCluster: z.string(),
-  sentiment: z.string(),
-  language: z.string(),
-  qualityScore: z.number().min(0).max(1),
-})`,
-  },
-
-  code: {
-    label: 'Code Analysis',
-    desc: 'Function extraction, dependencies, metrics',
-    input: `{
-  "fileName": "utils/auth.ts",
-  "functions": [
-    {
-      "name": "validateToken",
-      "signature": "async function validateToken(token: string): Promise<boolean>",
-      "lineStart": 5,
-      "lineEnd": 18,
-      "complexity": "3",
-      "parameters": ["token"],
-      "returnType": "Promise<boolean>",
-      "isAsync": "true",
-      "dependencies": ["jsonwebtoken", "config"],
-    },
-    {
-      name: "refreshToken",
-      "signature": "async function refreshToken(oldToken: string): Promise<string>",
-      "lineStart": 20,
-      "lineEnd": "35",
-      "complexity": 4,
-      "parameters": ["oldToken"],
-      "returnType": "Promise<string>",
-      "isAsync": true,
-      "dependencies": ["validateToken", "crypto", "config",],
-    }
-  ],
-  "imports": ["jsonwebtoken", "config", "crypto"],
-  "cyclomaticComplexity": "7",
-  "maintainabilityScore": "78",
-  "testCoverage": "85"
-}`,
-    schema: `z.object({
-  fileName: z.string(),
-  functions: z.array(z.object({
-    name: z.string(),
-    signature: z.string(),
-    lineStart: z.number(),
-    lineEnd: z.number(),
-    complexity: z.number(),
-    parameters: z.array(z.string()),
-    returnType: z.string(),
-    isAsync: z.boolean(),
-    dependencies: z.array(z.string()),
-  })),
-  imports: z.array(z.string()),
-  cyclomaticComplexity: z.number(),
-  maintainabilityScore: z.number(),
-  testCoverage: z.number(),
-})`,
-  },
-
-  chat: {
-    label: 'Chat Classification',
-    desc: 'Message intent, sentiment, priority routing',
-    input: `{
-  "messageId": "MSG-8472",
-  "timestamp": "2025-03-11T10:45:00Z",
-  "sender": "customer@example.com",
-  "content": "I've been trying to reset my password for hours but keep getting an error code 403. This is really frustrating!",
-  "intent": "support_request",
-  "entities": {issue: "password_reset", errorCode: "403"},
-  "sentiment": "negative",
-  "urgency": "high",
-  "priority": "2",
-  "category": ["account", "error"],
-  "suggestedResponse": "route_to_tier2_support",
-  "confidence": "0.89",
-  "escalationRequired": "true",
-  "estimatedResolutionTime": "15 minutes",
-  "suggestedSolution": "Clear browser cache and try incognito mode, Contact premium support if issue persists",
-  "customerSatisfactionPrediction": "3.2"
-}`,
-    schema: `z.object({
-  messageId: z.string(),
-  timestamp: z.string(),
-  sender: z.string().email(),
-  content: z.string(),
-  intent: z.string(),
-  entities: z.object({
-    issue: z.string(),
-    errorCode: z.string(),
-  }),
-  sentiment: z.enum(['positive', 'neutral', 'negative']),
-  urgency: z.enum(['low', 'medium', 'high', 'critical']),
-  priority: z.number(),
-  category: z.array(z.string()),
-  suggestedResponse: z.string(),
-  confidence: z.number().min(0).max(1),
-  escalationRequired: z.boolean(),
-  estimatedResolutionTime: z.string(),
-  suggestedSolution: z.string(),
-  customerSatisfactionPrediction: z.number(),
-})`,
-  },
-
+export const demoPresets: Record<string, DemoPreset> = {
   markdown: {
-    label: 'Markdown Wrapper',
+    label: 'Markdown Code Fence',
     desc: 'JSON wrapped in ```json fences',
-    input: '```json\n{"name": "Alice", "age": 30}\n```',
-    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n})`,
+    input: '```json\n{"name": "Alice", "age": 30, "email": "alice@example.com"}\n```',
+    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n  email: z.string(),\n})`,
+    corrections: [
+      {
+        description: 'Extracted JSON from markdown code fence wrapper',
+        before: '```json\\n{...}\\n```',
+        after: '{...}',
+      },
+    ],
+  },
+
+  trailingCommas: {
+    label: 'Trailing Commas',
+    desc: 'Object and array with trailing commas',
+    input: `{\n  "colors": ["red", "green", "blue",],\n  "count": 3,\n  "primary": "red",\n}`,
+    schema: `z.object({\n  colors: z.array(z.string()),\n  count: z.number(),\n  primary: z.string(),\n})`,
+    corrections: [
+      { description: 'Removed trailing comma in array' },
+      { description: 'Removed trailing comma after last property' },
+    ],
+  },
+
+  unquotedKeys: {
+    label: 'Unquoted Keys',
+    desc: 'Bare object keys without quotes',
+    input: `{name: "John", age: 30, city: "New York"}`,
+    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n  city: z.string(),\n})`,
+    corrections: [
+      { description: 'Quoted 3 bare keys: name, age, city' },
+    ],
+  },
+
+  singleQuotes: {
+    label: 'Single Quotes',
+    desc: "Keys and values in single quotes",
+    input: `{'language': 'TypeScript', 'version': '5.0', 'strict': true}`,
+    schema: `z.object({\n  language: z.string(),\n  version: z.string(),\n  strict: z.boolean(),\n})`,
+    corrections: [
+      { description: 'Converted single quotes to double quotes' },
+    ],
+  },
+
+  escapedQuotes: {
+    label: 'Escaped Quote Anomalies',
+    desc: 'Improperly escaped quote wrappers',
+    input: `{\\"title\\": \\"Hello World\\", \\"published\\": true}`,
+    schema: `z.object({\n  title: z.string(),\n  published: z.boolean(),\n})`,
+    corrections: [
+      { description: 'Removed escaped quote wrappers' },
+    ],
   },
 
   truncated: {
     label: 'Truncated Output',
     desc: 'Hit max_tokens mid-response',
-    input: '{"users": [{"name": "Alice", "age": 30}, {"name": "Bob"',
-    schema: `z.object({\n  users: z.array(z.object({\n    name: z.string(),\n    age: z.number().optional(),\n  })),\n})`,
+    input: '{"users": [{"name": "Alice", "age": 30}, {"name": "Bob", age: "25',
+    schema: `z.object({\n  users: z.array(z.object({\n    name: z.string(),\n    age: z.number(),\n  })),\n})`,
+    corrections: [
+      { description: 'Quoted bare key: age' },
+      { description: 'Closed 3 unclosed brackets: "}, ] }' },
+      { description: 'Coerced string "25" to number 25' },
+    ],
+  },
+
+  typeCoercion: {
+    label: 'Type Coercion',
+    desc: 'Strings where booleans and numbers expected',
+    input: `{\n  "name": "Widget Pro",\n  "price": "49.99",\n  "quantity": "100",\n  "inStock": "true",\n  "discontinued": "false",\n  "weight": "null"\n}`,
+    schema: `z.object({\n  name: z.string(),\n  price: z.number(),\n  quantity: z.number(),\n  inStock: z.boolean(),\n  discontinued: z.boolean(),\n  weight: z.number().nullable(),\n})`,
+    corrections: [
+      { description: 'Coerced "49.99" → 49.99, "100" → 100' },
+      { description: 'Coerced "true" → true, "false" → false' },
+      { description: 'Coerced "null" → null' },
+    ],
+  },
+
+  conversational: {
+    label: 'Conversational Wrapper',
+    desc: 'JSON buried in conversational text',
+    input: `Here's the data you requested:\n\n{"task": "summarize", "status": "complete", "confidence": 0.95, "tokens": 142}\n\nLet me know if you need anything else!`,
+    schema: `z.object({\n  task: z.string(),\n  status: z.string(),\n  confidence: z.number(),\n  tokens: z.number(),\n})`,
+    corrections: [
+      { description: 'Extracted JSON from conversational wrapper text' },
+    ],
+  },
+
+  combined: {
+    label: 'Combined Issues',
+    desc: 'Multiple problems in one output',
+    input: "```json\n{\n  name: \"Sarah Johnson\",\n  age: \"28\",\n  \"role\": 'engineer',\n  \"skills\": [\"TypeScript\", \"React\", \"Node.js\",],\n  \"active\": \"true\",\n}\n```",
+    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n  role: z.string(),\n  skills: z.array(z.string()),\n  active: z.boolean(),\n})`,
+    corrections: [
+      { description: 'Extracted JSON from markdown code fence' },
+      { description: 'Quoted 2 bare keys: name, age' },
+      { description: "Converted single quotes on 'engineer' to double quotes" },
+      { description: 'Removed 2 trailing commas' },
+      { description: 'Coerced "28" → 28, "true" → true' },
+    ],
+  },
+
+  validationFailure: {
+    label: 'Validation Failure',
+    desc: 'Valid JSON that fails schema validation',
+    input: `{\n  "title": "Meeting Notes",\n  "date": "2026-03-11",\n  "attendees": "Alice, Bob, Carol"\n}`,
+    schema: `z.object({\n  title: z.string(),\n  date: z.string(),\n  attendees: z.array(z.string()),\n  summary: z.string(),\n})`,
+    corrections: [
+      { description: 'Shows the retry prompt that would be sent to the LLM' },
+    ],
+  },
+
+  product: {
+    label: 'Product Extraction',
+    desc: 'E-commerce AI analysis with enrichment',
+    input: `{\n  "productId": "SKU-47291",\n  "title": "Premium Wireless Headphones",\n  "price": "299.99",\n  "rating": 4.7,\n  "reviewCount": "1240",\n  "inStock": "true",\n  "specs": {\n    "batteryLife": "30 hours",\n    connectivity: ["Bluetooth 5.2", "3.5mm Jack"],\n  },\n  "features": [\n    "Active Noise Cancellation",\n    "Comfort Fit",\n  ],\n  "competitors": "4",\n  "commonComplaint": null\n}`,
+    schema: `z.object({\n  productId: z.string(),\n  title: z.string(),\n  price: z.number(),\n  rating: z.number(),\n  reviewCount: z.number(),\n  inStock: z.boolean(),\n  specs: z.object({\n    batteryLife: z.string(),\n    connectivity: z.array(z.string()),\n  }),\n  features: z.array(z.string()),\n  competitors: z.number(),\n  commonComplaint: z.string().nullable(),\n})`,
+    corrections: [
+      { description: 'Quoted bare key: connectivity' },
+      { description: 'Removed 2 trailing commas' },
+      { description: 'Coerced "299.99" → 299.99, "1240" → 1240, "true" → true, "4" → 4' },
+    ],
   },
 }

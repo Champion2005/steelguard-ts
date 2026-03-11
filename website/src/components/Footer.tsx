@@ -1,11 +1,11 @@
-import { Shield } from 'lucide-react'
+import reforge_logo from '/reforge.svg'
 
 export default function Footer() {
   return (
     <footer className="border-t border-border/60">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 py-6 sm:flex-row sm:justify-between sm:px-6">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Shield className="h-3.5 w-3.5" />
+          <img src={reforge_logo} alt="Reforge" className="h-4 w-4" />
           <span>reforge-ai &copy; {new Date().getFullYear()}</span>
         </div>
         <div className="flex gap-5 text-xs text-muted-foreground">

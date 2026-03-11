@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-03-15
+
+### Added
+
+- **`forge()` function** — End-to-end structured LLM output. Calls a provider, pipes through `guard()`, and auto-retries on validation failure. Configurable `maxRetries` (default: 3) with targeted retry prompts.
+- **Provider adapter system** — `ReforgeProvider` interface with a single `call()` method. Three built-in adapters:
+  - `openaiCompatible()` — works with OpenAI, OpenRouter, Groq, Together, Fireworks, Ollama, LM Studio, vLLM, and any OpenAI-compatible API.
+  - `anthropic()` — dedicated Anthropic Claude adapter. Handles system message extraction and `max_tokens` defaults.
+  - `google()` — Google Gemini / Vertex AI adapter. Maps `assistant` role to `model`.
+- **Sub-path exports** — `reforge-ai/openai-compatible`, `reforge-ai/anthropic`, `reforge-ai/google`. Tree-shakeable, each adapter is independently importable.
+- **`ForgeTelemetry`** — Extends `TelemetryData` with `attempts` and `totalDurationMs` fields.
+- **New types** — `Message`, `ProviderCallOptions`, `ForgeOptions`, `ForgeResult`, `ReforgeProvider`.
+- **Full test coverage** — 36+ new tests for `forge()` and all three provider adapters.
+
+### Changed
+
+- Package exports now include four entry points (core + three adapters).
+- Provider SDKs (`openai`, `@anthropic-ai/sdk`, `@google/generative-ai`) added as optional peer dependencies.
+
 ## [0.1.1] - 2026-03-11
 
 ### Changed
@@ -41,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero runtime dependencies** — Only Zod as an optional peer dependency.
 - **Environment agnostic** — No Node-specific APIs. Works in Node.js, Bun, Deno, Cloudflare Workers, Vercel Edge, and browsers.
 
+[0.2.0]: https://github.com/Champion2005/reforge/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Champion2005/reforge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Champion2005/reforge/releases/tag/v0.1.0

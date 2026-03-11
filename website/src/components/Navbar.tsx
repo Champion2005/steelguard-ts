@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Github, Menu, X } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
+import { SiGithub } from 'react-icons/si'
 import { useState } from 'react'
 import reforge_logo from "/reforge.svg"
 
@@ -32,7 +33,7 @@ export default function Navbar() {
               key={link.to}
               to={link.to}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-                location.pathname === link.to
+                (link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to))
                   ? 'bg-muted text-foreground'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
               }`}
@@ -45,7 +46,7 @@ export default function Navbar() {
             href="https://github.com/Champion2005/reforge"
             aria-label="GitHub repository"
           >
-            <Github className="h-4.5 w-4.5" />
+            <SiGithub className="h-4.5 w-4.5" />
           </a>
         </div>
 
@@ -68,7 +69,7 @@ export default function Navbar() {
               to={link.to}
               onClick={() => setOpen(false)}
               className={`block rounded-md px-3 py-2 text-sm font-medium ${
-                location.pathname === link.to
+                (link.to === '/' ? location.pathname === '/' : location.pathname.startsWith(link.to))
                   ? 'bg-muted text-foreground'
                   : 'text-muted-foreground'
               }`}

@@ -1,12 +1,21 @@
 import CodeBlock from '../components/CodeBlock'
-import { BookOpen, Download, Wrench, Shield, Zap, RotateCcw, Globe, HelpCircle, Bug, BarChart3 } from 'lucide-react'
+import { BookOpen, Download, Wrench, Shield, Zap, RotateCcw, Globe, HelpCircle, Bug, BarChart3, Layers } from 'lucide-react'
 
 const installCode = `npm install reforge-ai zod`
+
+const installProvidersCode = `# OpenAI / OpenRouter / Groq / Together / Ollama / etc.
+npm install reforge-ai zod openai
+
+# Anthropic
+npm install reforge-ai zod @anthropic-ai/sdk
+
+# Google Gemini
+npm install reforge-ai zod @google/generative-ai`
 
 const quickStartCode = `import { z } from 'zod';
 import { guard } from 'reforge-ai';
 
-const UserSchema= z.object({
+const UserSchema = z.object({
   name: z.string(),
   age:  z.number(),
 });
@@ -21,11 +30,37 @@ if (result.success) {
   messages.push({ role: 'user', content: result.retryPrompt });
 }`
 
-const openaiCode = `import OpenAI from 'openai';
-import { z } from 'zod';
-import { guard } from 'reforge-ai';
+const forgeQuickStartCode = `import { z } from 'zod';
+import { forge } from 'reforge-ai';
+import { openaiCompatible } from 'reforge-ai/openai-compatible';
+import OpenAI from 'openai';
 
-const openai= new OpenAI();
+const provider = openaiCompatible(new OpenAI(), 'gpt-4o');
+
+const Colors = z.array(z.object({
+  name: z.string(),
+  hex:  z.string(),
+}));
+
+const result = await forge(provider, [
+  { role: 'system', content: 'Return JSON matching the schema.' },
+  { role: 'user', content: 'List 3 colors with hex codes.' },
+], Colors);
+
+if (result.success) {
+  console.log(result.data);
+  // → [{ name: "Red", hex: "#FF0000" }, ...]
+  console.log(result.telemetry);
+  // → { durationMs: 1.2, status: "clean", attempts: 1, totalDurationMs: 845 }
+}`
+
+const openaiForgeCode = `import { z } from 'zod';
+import { forge } from 'reforge-ai';
+import { openaiCompatible } from 'reforge-ai/openai-compatible';
+import OpenAI from 'openai';
+
+const client = new OpenAI();
+const provider = openaiCompatible(client, 'gpt-4o');
 
 const ProductSchema = z.object({
   name:  z.string(),
@@ -33,81 +68,94 @@ const ProductSchema = z.object({
   tags:  z.array(z.string()),
 });
 
-async function getProduct(prompt: string) {
-  const messages: OpenAI.ChatCompletionMessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
+const result = await forge(provider, [
+  { role: 'user', content: 'Extract product info for: iPhone 16 Pro Max' },
+], ProductSchema, {
+  maxRetries: 3,
+  providerOptions: { temperature: 0.1 },
+});
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-    });
-
-    const raw = response.choices[0].message.content ?? '';
-    const result = guard(raw, ProductSchema);
-
-    if (result.success) return result.data;
-
-    // Append the retry prompt and try again
-    messages.push(
-      { role: 'assistant', content: raw },
-      { role: 'user', content: result.retryPrompt },
-    );
-  }
-
-  throw new Error('Failed after 3 attempts');
+if (result.success) {
+  console.log(result.data); // fully typed as { name: string; price: number; tags: string[] }
 }`
 
-const anthropicCode = `import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
-import { guard } from 'reforge-ai';
+const openRouterCode = `import { z } from 'zod';
+import { forge } from 'reforge-ai';
+import { openaiCompatible } from 'reforge-ai/openai-compatible';
+import OpenAI from 'openai';
 
-const client= new Anthropic();
+// Same adapter — just a different baseURL
+const client = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const provider = openaiCompatible(client, 'anthropic/claude-sonnet-4-20250514');
+
+const result = await forge(provider, messages, schema);`
+
+const anthropicForgeCode = `import { z } from 'zod';
+import { forge } from 'reforge-ai';
+import { anthropic } from 'reforge-ai/anthropic';
+import Anthropic from '@anthropic-ai/sdk';
+
+const client = new Anthropic();
+const provider = anthropic(client, 'claude-sonnet-4-20250514');
 
 const EventSchema = z.object({
-  title: z.string(),
-  date:  z.string(),
+  title:     z.string(),
+  date:      z.string(),
   attendees: z.array(z.string()),
 });
 
-async function getEvent(prompt: string) {
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: prompt },
-  ];
+const result = await forge(provider, [
+  { role: 'user', content: 'Parse this: Team standup on March 15 with Alice, Bob, Carol' },
+], EventSchema);`
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages,
+const googleForgeCode = `import { z } from 'zod';
+import { forge } from 'reforge-ai';
+import { google } from 'reforge-ai/google';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+const provider = google(client, 'gemini-2.0-flash');
+
+const SummarySchema = z.object({
+  title:    z.string(),
+  summary:  z.string(),
+  keywords: z.array(z.string()),
+});
+
+const result = await forge(provider, [
+  { role: 'user', content: 'Summarize: TypeScript 5.7 adds ...' },
+], SummarySchema);`
+
+const customProviderCode = `import { forge, type ReforgeProvider, type Message } from 'reforge-ai';
+
+const myProvider: ReforgeProvider = {
+  async call(messages: Message[], options) {
+    const res = await fetch('https://my-llm-api.com/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages,
+        temperature: options?.temperature,
+        max_tokens: options?.maxTokens,
+      }),
     });
+    const data = await res.json();
+    return data.text;
+  },
+};
 
-    const raw = response.content[0].type === 'text'
-      ? response.content[0].text : '';
-    const result = guard(raw, EventSchema);
+const result = await forge(myProvider, messages, schema);`
 
-    if (result.success) return result.data;
-
-    messages.push(
-      { role: 'assistant', content: raw },
-      { role: 'user', content: result.retryPrompt },
-    );
-  }
-
-  throw new Error('Failed after 3 attempts');
-}`
-
-const apiTypes = `// The main entry-point
+const guardApiTypes = `// ── Core: guard() ──
 function guard<T extends z.ZodTypeAny>(
   llmOutput: string,
   schema: T
 ): GuardResult<z.infer<T>>
 
-// Discriminated union result
-type GuardResult<T> =
-  | GuardSuccess<T>
-  | GuardFailure;
+type GuardResult<T> = GuardSuccess<T> | GuardFailure;
 
 interface GuardSuccess<T> {
   success: true;
@@ -127,6 +175,59 @@ interface TelemetryData {
   durationMs: number;
   status: 'clean' | 'repaired_natively' | 'failed';
 }`
+
+const forgeApiTypes = `// ── Provider Layer: forge() ──
+async function forge<T extends z.ZodTypeAny>(
+  provider: ReforgeProvider,
+  messages: Message[],
+  schema: T,
+  options?: ForgeOptions
+): Promise<ForgeResult<z.infer<T>>>
+
+interface ReforgeProvider {
+  call(messages: Message[], options?: ProviderCallOptions): Promise<string>;
+}
+
+interface Message {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+interface ForgeOptions {
+  maxRetries?: number;         // Default: 3
+  providerOptions?: ProviderCallOptions;
+}
+
+interface ProviderCallOptions {
+  temperature?: number;
+  maxTokens?: number;
+  [key: string]: unknown;      // Pass-through for provider-specific options
+}
+
+type ForgeResult<T> = ForgeSuccess<T> | ForgeFailure;
+
+interface ForgeSuccess<T> {
+  success: true;
+  data: T;
+  telemetry: ForgeTelemetry;
+  isRepaired: boolean;
+}
+
+interface ForgeFailure {
+  success: false;
+  errors: ZodIssue[];
+  telemetry: ForgeTelemetry;
+}
+
+interface ForgeTelemetry extends TelemetryData {
+  attempts: number;
+  totalDurationMs: number;
+}
+
+// ── Adapter factories ──
+function openaiCompatible(client: OpenAIClient, model: string): ReforgeProvider;
+function anthropic(client: AnthropicClient, model: string): ReforgeProvider;
+function google(client: GoogleClient, model: string): ReforgeProvider;`
 
 const edgeRouteCode = `// app/api/parse/route.ts (Next.js Edge)
 import { z } from 'zod';
@@ -157,10 +258,16 @@ const sections = [
   { id: 'intro', label: 'Introduction', icon: BookOpen },
   { id: 'install', label: 'Installation', icon: Download },
   { id: 'quickstart', label: 'Quick Start', icon: Zap },
+  { id: 'forge', label: 'forge() — End-to-End', icon: Layers },
   { id: 'concepts', label: 'Concepts', icon: BookOpen },
-  { id: 'api', label: 'API Reference', icon: Shield },
+  { id: 'api-guard', label: 'API: guard()', icon: Shield },
+  { id: 'api-forge', label: 'API: forge()', icon: Shield },
+  { id: 'providers', label: 'Provider Adapters', icon: Wrench },
   { id: 'openai', label: 'OpenAI Integration', icon: Wrench },
+  { id: 'openrouter', label: 'OpenRouter', icon: Wrench },
   { id: 'anthropic', label: 'Anthropic Integration', icon: Wrench },
+  { id: 'google', label: 'Google Gemini', icon: Wrench },
+  { id: 'custom', label: 'Custom Provider', icon: Wrench },
   { id: 'edge', label: 'Edge Runtime', icon: Globe },
   { id: 'retry', label: 'Retry Strategy', icon: RotateCcw },
   { id: 'performance', label: 'Performance', icon: BarChart3 },
@@ -173,7 +280,7 @@ const sections = [
 export default function Docs() {
   return (
     <section className="px-4 py-12 sm:px-6 sm:py-20">
-      <div className="mx-auto max-w-6xl lg:grid lg:grid-cols-[200px_1fr] lg:gap-12">
+      <div className="mx-auto max-w-7xl lg:grid lg:grid-cols-[220px_1fr] lg:gap-12">
         {/* Sidebar nav */}
         <aside className="hidden lg:block">
           <nav className="sticky top-20 space-y-0.5">
@@ -256,6 +363,10 @@ export default function Docs() {
               Reforge requires <strong className="text-foreground">Zod</strong> as a peer dependency. Install both:
             </p>
             <CodeBlock code={installCode} lang="bash" />
+            <p className="text-muted-foreground">
+              To use provider adapters with <InlineCode>forge()</InlineCode>, also install the provider SDK:
+            </p>
+            <CodeBlock code={installProvidersCode} lang="bash" />
             <p className="text-sm text-muted-foreground/70">
               Works with npm, yarn, pnpm, and bun. Requires Node.js 18+ or any
               modern edge runtime.
@@ -264,13 +375,36 @@ export default function Docs() {
 
           {/* Quick Start */}
           <div id="quickstart" className="scroll-mt-24 space-y-4">
-            <SectionHeader>Quick Start</SectionHeader>
+            <SectionHeader>Quick Start — guard()</SectionHeader>
             <p className="text-muted-foreground">
               Import <InlineCode>guard</InlineCode>, define your Zod schema, and pass the raw LLM string. That's it.
             </p>
             <CodeBlock code={quickStartCode} />
             <p className="text-muted-foreground">
               The <InlineCode>result</InlineCode> is a discriminated union — use <InlineCode>result.success</InlineCode> to narrow the type.
+            </p>
+          </div>
+
+          {/* forge() Quick Start */}
+          <div id="forge" className="scroll-mt-24 space-y-4">
+            <SectionHeader>forge() — End-to-End Structured Output</SectionHeader>
+            <p className="text-muted-foreground leading-relaxed">
+              <InlineCode>forge()</InlineCode> wraps the entire flow: call your LLM, pipe through <InlineCode>guard()</InlineCode>, and auto-retry if validation fails. One function replaces the manual retry loop.
+            </p>
+            <CodeBlock code={forgeQuickStartCode} />
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+              <p className="text-sm font-semibold text-foreground mb-3">How forge() works:</p>
+              <ol className="list-decimal space-y-2 pl-6 text-sm text-muted-foreground">
+                <li>Calls the provider with your messages</li>
+                <li>Pipes the raw response through <InlineCode>guard()</InlineCode></li>
+                <li>If <InlineCode>guard()</InlineCode> succeeds — returns the validated data</li>
+                <li>If <InlineCode>guard()</InlineCode> fails — appends the retry prompt and calls the LLM again</li>
+                <li>Repeats up to <InlineCode>maxRetries</InlineCode> (default: 3)</li>
+                <li>If all retries exhausted — returns failure with accumulated errors</li>
+              </ol>
+            </div>
+            <p className="text-muted-foreground leading-relaxed">
+              <InlineCode>forge()</InlineCode> never mutates your original messages array. Provider errors (network failures, auth errors) bubble up as exceptions.
             </p>
           </div>
 
@@ -325,13 +459,13 @@ export default function Docs() {
             </ConceptCard>
           </div>
 
-          {/* API Reference */}
-          <div id="api" className="scroll-mt-24 space-y-5">
-            <SectionHeader>API Reference</SectionHeader>
+          {/* API Reference — guard() */}
+          <div id="api-guard" className="scroll-mt-24 space-y-5">
+            <SectionHeader>API Reference — guard()</SectionHeader>
             <p className="text-muted-foreground">
-              Reforge exports a single function and its associated types.
+              The core synchronous function. Zero dependencies beyond Zod.
             </p>
-            <CodeBlock code={apiTypes} />
+            <CodeBlock code={guardApiTypes} />
 
             <div className="mt-8 space-y-5">
               <div className="rounded-xl border border-border/60 bg-card/30 p-6">
@@ -357,22 +491,124 @@ export default function Docs() {
             </div>
           </div>
 
+          {/* API Reference — forge() */}
+          <div id="api-forge" className="scroll-mt-24 space-y-5">
+            <SectionHeader>API Reference — forge() & Providers</SectionHeader>
+            <p className="text-muted-foreground">
+              The async orchestrator and provider adapter types.
+            </p>
+            <CodeBlock code={forgeApiTypes} />
+
+            <div className="mt-8 space-y-5">
+              <div className="rounded-xl border border-border/60 bg-card/30 p-6">
+                <h3 className="text-base font-semibold text-foreground">
+                  <code className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-sm text-primary">forge(provider, messages, schema, options?)</code>
+                </h3>
+                <div className="mt-4 space-y-2.5 text-sm text-muted-foreground">
+                  <ParamRow name="provider" type="ReforgeProvider" desc="An adapter wrapping your LLM SDK." />
+                  <ParamRow name="messages" type="Message[]" desc="The conversation messages to send." />
+                  <ParamRow name="schema" type="z.ZodTypeAny" desc="The Zod schema to validate against." />
+                  <ParamRow name="options" type="ForgeOptions" desc="Optional: maxRetries (default 3), providerOptions." />
+                  <ParamRow name="Returns" type="Promise<ForgeResult<T>>" desc="Discriminated union with telemetry including attempts and totalDurationMs." />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/60 bg-card/30 p-6">
+                <h3 className="text-base font-semibold text-foreground">
+                  <code className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-sm text-primary">ForgeTelemetry</code>
+                </h3>
+                <div className="mt-4 space-y-2.5 text-sm text-muted-foreground">
+                  <ParamRow name="durationMs" type="number" desc="Duration of the last guard() call." />
+                  <ParamRow name="status" type="string" desc="Status of the last guard() call." />
+                  <ParamRow name="attempts" type="number" desc="Total LLM calls made (1 = first try succeeded)." />
+                  <ParamRow name="totalDurationMs" type="number" desc="Wall-clock time for the entire forge() call." />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Provider Adapters */}
+          <div id="providers" className="scroll-mt-24 space-y-4">
+            <SectionHeader>Provider Adapters</SectionHeader>
+            <p className="text-muted-foreground leading-relaxed">
+              Reforge ships three built-in adapters. Each wraps the respective SDK's chat completion call and extracts the text content from the response. You pass your own pre-configured client — Reforge never manages credentials.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/60">
+                    <th className="pb-3 text-left font-semibold text-foreground">Adapter</th>
+                    <th className="pb-3 text-left font-semibold text-foreground">Import</th>
+                    <th className="pb-3 text-left font-semibold text-foreground">Covers</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30 text-muted-foreground">
+                  <tr>
+                    <td className="py-2.5"><InlineCode>openaiCompatible()</InlineCode></td>
+                    <td className="py-2.5 font-mono text-xs">reforge-ai/openai-compatible</td>
+                    <td className="py-2.5">OpenAI, OpenRouter, Groq, Together, Fireworks, Ollama, LM Studio, vLLM</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5"><InlineCode>anthropic()</InlineCode></td>
+                    <td className="py-2.5 font-mono text-xs">reforge-ai/anthropic</td>
+                    <td className="py-2.5">Anthropic Claude</td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5"><InlineCode>google()</InlineCode></td>
+                    <td className="py-2.5 font-mono text-xs">reforge-ai/google</td>
+                    <td className="py-2.5">Google Gemini, Vertex AI</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm text-muted-foreground/70">
+              The <InlineCode>openaiCompatible()</InlineCode> adapter works with ANY OpenAI-compatible provider because you pass a pre-configured client with custom <InlineCode>baseURL</InlineCode>. Reforge never manages credentials.
+            </p>
+          </div>
+
           {/* OpenAI Integration */}
           <div id="openai" className="scroll-mt-24 space-y-4">
             <SectionHeader>OpenAI Integration</SectionHeader>
             <p className="text-muted-foreground">
-              Use the retry prompt with the OpenAI SDK to build a robust retry loop:
+              Use <InlineCode>forge()</InlineCode> with the OpenAI adapter for end-to-end structured output:
             </p>
-            <CodeBlock code={openaiCode} />
+            <CodeBlock code={openaiForgeCode} />
+          </div>
+
+          {/* OpenRouter Integration */}
+          <div id="openrouter" className="scroll-mt-24 space-y-4">
+            <SectionHeader>OpenRouter / Compatible Providers</SectionHeader>
+            <p className="text-muted-foreground leading-relaxed">
+              Any OpenAI-compatible API works with the same adapter — just change the <InlineCode>baseURL</InlineCode>. This covers OpenRouter, Groq, Together, Fireworks, Ollama, LM Studio, and more.
+            </p>
+            <CodeBlock code={openRouterCode} />
           </div>
 
           {/* Anthropic Integration */}
           <div id="anthropic" className="scroll-mt-24 space-y-4">
             <SectionHeader>Anthropic Integration</SectionHeader>
             <p className="text-muted-foreground">
-              Same pattern works with the Anthropic SDK:
+              Use the dedicated Anthropic adapter:
             </p>
-            <CodeBlock code={anthropicCode} />
+            <CodeBlock code={anthropicForgeCode} />
+          </div>
+
+          {/* Google Gemini Integration */}
+          <div id="google" className="scroll-mt-24 space-y-4">
+            <SectionHeader>Google Gemini Integration</SectionHeader>
+            <p className="text-muted-foreground">
+              Use the Google adapter with the <InlineCode>@google/generative-ai</InlineCode> SDK:
+            </p>
+            <CodeBlock code={googleForgeCode} />
+          </div>
+
+          {/* Custom Provider */}
+          <div id="custom" className="scroll-mt-24 space-y-4">
+            <SectionHeader>Custom Provider</SectionHeader>
+            <p className="text-muted-foreground leading-relaxed">
+              Need a provider not covered by the built-ins? Implement the single-method <InlineCode>ReforgeProvider</InlineCode> interface:
+            </p>
+            <CodeBlock code={customProviderCode} />
           </div>
 
           {/* Edge Runtime */}
@@ -400,9 +636,13 @@ export default function Docs() {
             <div className="space-y-3">
               <div className="rounded-xl border border-border/60 bg-card/30 p-5 text-sm">
                 <p className="font-semibold text-foreground mb-1">Parse failure <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">errors: []</span></p>
-                <p className="text-xs text-muted-foreground mb-3">The LLM returned something that couldn't be extracted as JSON at all. The offending text is echoed back verbatim so the LLM knows exactly what it produced.</p>
+                <p className="text-xs text-muted-foreground mb-3">The LLM returned something that couldn't be extracted as JSON at all. When the output is short enough to be the complete picture (&le;300 chars), it's echoed verbatim. For longer outputs the snippet is omitted.</p>
                 <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-[oklch(0.13_0.005_286)] p-3.5 font-mono text-[13px] leading-6 text-muted-foreground">
-{`Your previous response could not be parsed as JSON. Got: \`Sure! Here is your data: name Alice age 30...\`. The schema is still in your context — return ONLY valid JSON.`}
+{`// Short output — full text is included:
+Your previous response could not be parsed as JSON. Got: \`{name: Alice age: 30}\`. The schema is still in your context — return ONLY valid JSON.
+
+// Long output — snippet omitted:
+Your previous response could not be parsed as JSON. The schema is still in your context — return ONLY valid JSON.`}
                 </pre>
               </div>
               <div className="rounded-xl border border-border/60 bg-card/30 p-5 text-sm">
@@ -519,8 +759,12 @@ export default function Docs() {
           <div id="faq" className="scroll-mt-24 space-y-5">
             <SectionHeader>Frequently Asked Questions</SectionHeader>
 
-            <FaqItem question="Does Reforge make any network requests?">
-              No. Reforge is entirely local and synchronous. It never calls an API, opens a socket, or performs any I/O. The retry prompt is just a string — you decide whether and how to send it to your LLM provider.
+            <FaqItem question="What's the difference between guard() and forge()?">
+              <InlineCode>guard()</InlineCode> is synchronous and local — it takes a raw string and validates it. <InlineCode>forge()</InlineCode> is async and end-to-end — it calls your LLM, validates with <InlineCode>guard()</InlineCode>, and auto-retries if needed. Use <InlineCode>guard()</InlineCode> if you manage the LLM calls yourself, or <InlineCode>forge()</InlineCode> for a batteries-included experience.
+            </FaqItem>
+
+            <FaqItem question="Does guard() make any network requests?">
+              No. <InlineCode>guard()</InlineCode> is entirely local and synchronous. <InlineCode>forge()</InlineCode> makes network requests via your provider adapter, but <InlineCode>guard()</InlineCode> never does.
             </FaqItem>
 
             <FaqItem question="What happens if the input is not JSON at all?">

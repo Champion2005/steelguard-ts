@@ -1,6 +1,11 @@
 import type { ZodIssue } from "zod";
 
-/** Maximum characters of raw input to include in a parse-failure prompt. */
+/**
+ * Maximum characters of raw input to include in a parse-failure prompt.
+ * If the raw output exceeds this, the snippet is omitted entirely — a
+ * truncated beginning gives the LLM no actionable signal about what went
+ * wrong, and wastes tokens.
+ */
 const RAW_SNIPPET_MAX = 300;
 
 /**
@@ -21,9 +26,11 @@ const RAW_SNIPPET_MAX = 300;
  *
  * @param errors     - The `ZodIssue[]` array from a failed `safeParse()`. Pass
  *                     an empty array when the failure is a parse error.
- * @param rawSnippet - The raw LLM output that could not be parsed. When
- *                     provided and `errors` is empty, it is included in the
- *                     prompt so the LLM knows exactly what it produced.
+ * @param rawSnippet - The raw LLM output that could not be parsed. Included
+ *                     in the prompt only when it fits entirely within
+ *                     {@link RAW_SNIPPET_MAX} characters — a truncated leading
+ *                     slice gives no actionable signal, so it is omitted for
+ *                     longer outputs.
  * @returns A prompt string ready to be appended to the LLM message array.
  *
  * @example Validation failure
@@ -46,12 +53,15 @@ export function generateRetryPrompt(
 ): string {
   // Parse failure: JSON could not be extracted at all.
   if (errors.length === 0) {
-    if (rawSnippet !== undefined && rawSnippet.length > 0) {
-      const snippet =
-        rawSnippet.length > RAW_SNIPPET_MAX
-          ? rawSnippet.slice(0, RAW_SNIPPET_MAX) + "\u2026"
-          : rawSnippet;
-      return `Your previous response could not be parsed as JSON. Got: \`${snippet}\`. The schema is still in your context — return ONLY valid JSON.`;
+    // Only echo the raw output when it fits entirely — a truncated leading
+    // slice shows the LLM a fragment that may look fine, giving no signal
+    // about where extraction failed and wasting context tokens.
+    if (
+      rawSnippet !== undefined &&
+      rawSnippet.length > 0 &&
+      rawSnippet.length <= RAW_SNIPPET_MAX
+    ) {
+      return `Your previous response could not be parsed as JSON. Got: \`${rawSnippet}\`. The schema is still in your context — return ONLY valid JSON.`;
     }
     return "Your previous response could not be parsed as JSON. The schema is still in your context — return ONLY valid JSON.";
   }

@@ -36,15 +36,20 @@ Network retries to providers (OpenAI, Anthropic, etc.) cost **1-3 seconds** and 
 npm install reforge-ai zod
 ```
 
-```bash
-pnpm add reforge-ai zod
-```
+To use provider adapters with `forge()`, also install the provider SDK:
 
 ```bash
-yarn add reforge-ai zod
+# OpenAI / OpenRouter / Groq / Together / Ollama / etc.
+npm install reforge-ai zod openai
+
+# Anthropic
+npm install reforge-ai zod @anthropic-ai/sdk
+
+# Google Gemini
+npm install reforge-ai zod @google/generative-ai
 ```
 
-> `zod` is an optional peer dependency. It's required for schema validation but `reforge-ai` has **zero runtime dependencies**.
+> `zod` is an optional peer dependency. Provider SDKs are optional peer dependencies — only install what you use.
 
 ## Quick Start
 
@@ -71,6 +76,94 @@ if (result.success) {
   console.log(result.retryPrompt);
   console.log(result.errors);     // ZodIssue[]
 }
+```
+
+## End-to-End with forge()
+
+`forge()` wraps the entire flow: call your LLM → repair → validate → auto-retry.
+
+```typescript
+import { z } from "zod";
+import { forge } from "reforge-ai";
+import { openaiCompatible } from "reforge-ai/openai-compatible";
+import OpenAI from "openai";
+
+const provider = openaiCompatible(new OpenAI(), "gpt-4o");
+
+const Colors = z.array(
+  z.object({
+    name: z.string(),
+    hex: z.string(),
+  })
+);
+
+const result = await forge(
+  provider,
+  [{ role: "user", content: "List 3 colors with hex codes." }],
+  Colors
+);
+
+if (result.success) {
+  console.log(result.data);
+  // → [{ name: "Red", hex: "#FF0000" }, ...]
+  console.log(result.telemetry);
+  // → { durationMs: 1.2, status: "clean", attempts: 1, totalDurationMs: 845 }
+}
+```
+
+### Provider Adapters
+
+| Adapter | Import | Covers |
+|---|---|---|
+| `openaiCompatible()` | `reforge-ai/openai-compatible` | OpenAI, OpenRouter, Groq, Together, Fireworks, Ollama, LM Studio, vLLM |
+| `anthropic()` | `reforge-ai/anthropic` | Anthropic Claude |
+| `google()` | `reforge-ai/google` | Google Gemini, Vertex AI |
+
+```typescript
+// OpenRouter — same adapter, different baseURL
+import { openaiCompatible } from "reforge-ai/openai-compatible";
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
+const provider = openaiCompatible(client, "anthropic/claude-sonnet-4-20250514");
+```
+
+```typescript
+// Anthropic
+import { anthropic } from "reforge-ai/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
+
+const provider = anthropic(new Anthropic(), "claude-sonnet-4-20250514");
+```
+
+```typescript
+// Google Gemini
+import { google } from "reforge-ai/google";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const provider = google(
+  new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!),
+  "gemini-2.0-flash"
+);
+```
+
+```typescript
+// Custom provider — implement a single method
+import { forge, type ReforgeProvider } from "reforge-ai";
+
+const myProvider: ReforgeProvider = {
+  async call(messages, options) {
+    const res = await fetch("https://my-llm-api.com/chat", {
+      method: "POST",
+      body: JSON.stringify({ messages, ...options }),
+    });
+    const data = await res.json();
+    return data.text;
+  },
+};
 ```
 
 ## How It Works
@@ -109,10 +202,14 @@ If validation fails, Reforge generates a token-efficient prompt you can append t
 Your previous response failed schema validation. Errors: [Path: /user/age, Expected: number, Received: string]. The schema is still in your context — return ONLY corrected valid JSON.
 ```
 
-When the LLM returns something that can't be parsed as JSON at all, the raw text is echoed back:
+When the LLM returns something that can't be parsed as JSON at all, the raw text is echoed back if it's short enough to be the full picture (\u2264300 chars). For longer outputs, the snippet is omitted — a truncated fragment of the beginning shows nothing useful:
 
 ```
-Your previous response could not be parsed as JSON. Got: `Sure! Here is your data...`. The schema is still in your context — return ONLY valid JSON.
+// Short output — full text echoed:
+Your previous response could not be parsed as JSON. Got: `{name: Alice age: 30}`. The schema is still in your context — return ONLY valid JSON.
+
+// Long output — snippet omitted:
+Your previous response could not be parsed as JSON. The schema is still in your context — return ONLY valid JSON.
 ```
 
 No network requests. No retries. Just a string you feed back.
@@ -159,9 +256,102 @@ type TelemetryData = {
 };
 ```
 
+### `forge<T>(provider, messages, schema, options?): Promise<ForgeResult<z.infer<T>>>`
+
+End-to-end structured output: call LLM → guard() → auto-retry.
+
+**Parameters:**
+
+| Name | Type | Description |
+|---|---|---|
+| `provider` | `ReforgeProvider` | An adapter wrapping your LLM SDK |
+| `messages` | `Message[]` | Conversation messages to send |
+| `schema` | `ZodTypeAny` | The Zod schema the output must conform to |
+| `options` | `ForgeOptions` | Optional: `maxRetries` (default: 3), `providerOptions` |
+
+**Returns:** `Promise<ForgeResult<T>>`:
+
+```typescript
+// Success
+{
+  success: true;
+  data: T;
+  telemetry: ForgeTelemetry;
+  isRepaired: boolean;
+}
+
+// Failure
+{
+  success: false;
+  errors: ZodIssue[];
+  telemetry: ForgeTelemetry;
+}
+
+// ForgeTelemetry extends TelemetryData
+interface ForgeTelemetry extends TelemetryData {
+  attempts: number;       // Total LLM calls made
+  totalDurationMs: number; // Wall-clock time for entire forge() call
+}
+```
+
 ## Examples
 
-### OpenAI Integration
+### OpenAI with forge()
+
+```typescript
+import { z } from "zod";
+import { forge } from "reforge-ai";
+import { openaiCompatible } from "reforge-ai/openai-compatible";
+import OpenAI from "openai";
+
+const provider = openaiCompatible(new OpenAI(), "gpt-4o");
+
+const RecipeSchema = z.object({
+  title: z.string(),
+  ingredients: z.array(z.string()),
+  steps: z.array(z.string()),
+});
+
+const result = await forge(
+  provider,
+  [
+    { role: "system", content: "Return JSON only." },
+    { role: "user", content: "Give me a recipe for chocolate cake." },
+  ],
+  RecipeSchema,
+  { maxRetries: 3, providerOptions: { temperature: 0.2 } }
+);
+
+if (result.success) {
+  console.log(`Resolved in ${result.telemetry.attempts} attempt(s)`);
+  console.log(result.data);
+}
+```
+
+### Anthropic with forge()
+
+```typescript
+import { z } from "zod";
+import { forge } from "reforge-ai";
+import { anthropic } from "reforge-ai/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
+
+const provider = anthropic(new Anthropic(), "claude-sonnet-4-20250514");
+
+const SummarySchema = z.object({
+  title: z.string(),
+  summary: z.string(),
+  tags: z.array(z.string()),
+});
+
+const result = await forge(
+  provider,
+  [{ role: "user", content: "Summarize: TypeScript 5.7 adds ..." }],
+  SummarySchema
+);
+```
+
+### guard() Only (Manual Retry)
 
 ```typescript
 import OpenAI from "openai";
@@ -170,15 +360,14 @@ import { guard } from "reforge-ai";
 
 const client = new OpenAI();
 
-const RecipeSchema = z.object({
-  title: z.string(),
-  ingredients: z.array(z.string()),
-  steps: z.array(z.string()),
+const ProductSchema = z.object({
+  name: z.string(),
+  price: z.number(),
+  tags: z.array(z.string()),
 });
 
-async function getRecipe(prompt: string) {
+async function getProduct(prompt: string) {
   const messages: OpenAI.ChatCompletionMessageParam[] = [
-    { role: "system", content: "Return JSON only." },
     { role: "user", content: prompt },
   ];
 
@@ -189,56 +378,15 @@ async function getRecipe(prompt: string) {
     });
 
     const raw = response.choices[0]?.message?.content ?? "";
-    const result = guard(raw, RecipeSchema);
+    const result = guard(raw, ProductSchema);
 
-    if (result.success) {
-      console.log(`Resolved in ${result.telemetry.durationMs.toFixed(2)}ms`);
-      return result.data;
-    }
+    if (result.success) return result.data;
 
-    // Append the retry prompt for the next attempt
     messages.push({ role: "assistant", content: raw });
     messages.push({ role: "user", content: result.retryPrompt });
   }
 
   throw new Error("Failed after 3 attempts");
-}
-```
-
-### Anthropic Integration
-
-```typescript
-import Anthropic from "@anthropic-ai/sdk";
-import { z } from "zod";
-import { guard } from "reforge-ai";
-
-const client = new Anthropic();
-
-const SummarySchema = z.object({
-  title: z.string(),
-  summary: z.string(),
-  tags: z.array(z.string()),
-});
-
-async function getSummary(text: string) {
-  const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: `Summarize as JSON: ${text}` },
-  ];
-
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 1024,
-    messages,
-  });
-
-  const raw = response.content[0]?.type === "text" ? response.content[0].text : "";
-  const result = guard(raw, SummarySchema);
-
-  if (result.success) return result.data;
-
-  // Use retryPrompt for follow-up
-  console.error("Validation failed:", result.retryPrompt);
-  return null;
 }
 ```
 

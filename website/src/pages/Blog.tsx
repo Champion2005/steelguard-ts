@@ -3,6 +3,22 @@ import { Calendar, Clock, ArrowRight } from 'lucide-react'
 
 export const blogPosts = [
   {
+    slug: 'structured-output-any-llm-typescript',
+    title: 'How to Get Structured Output from Any LLM in 5 Lines of TypeScript',
+    excerpt:
+      'Getting validated, typed JSON from LLMs shouldn\'t require a retry loop. See how forge() turns any provider into a structured output API with a single function call.',
+    date: 'March 14, 2026',
+    readingTime: '7 min read',
+  },
+  {
+    slug: 'reliable-ai-agents-retry-validation',
+    title: 'Building Reliable AI Agents with Automatic Retry and Validation',
+    excerpt:
+      'AI agents break when LLM output is malformed. Learn how to build multi-step pipelines that validate every interaction, repair locally, and retry intelligently.',
+    date: 'March 12, 2026',
+    readingTime: '9 min read',
+  },
+  {
     slug: 'enforce-json-schemas-openai-2026',
     title: 'How to Enforce JSON Schemas with OpenAI in 2026',
     excerpt:

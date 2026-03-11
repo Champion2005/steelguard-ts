@@ -1,0 +1,141 @@
+import { describe, it, expect, vi } from "vitest";
+import { google } from "../../src/providers/google.js";
+import type { Message } from "../../src/providers/types.js";
+
+/**
+ * Helper: create a mock Google Generative AI client.
+ */
+function mockGoogleClient(text: string = '{"result": true}') {
+  const sendMessage = vi.fn(async () => ({
+    response: { text: () => text },
+  }));
+
+  const startChat = vi.fn(() => ({ sendMessage }));
+
+  const getGenerativeModel = vi.fn(() => ({ startChat }));
+
+  return {
+    getGenerativeModel,
+    _startChat: startChat,
+    _sendMessage: sendMessage,
+  };
+}
+
+describe("google()", () => {
+  it("maps assistant role to model", async () => {
+    const client = mockGoogleClient('{"ok": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    const messages: Message[] = [
+      { role: "user", content: "First" },
+      { role: "assistant", content: "Response" },
+      { role: "user", content: "Second" },
+    ];
+
+    await provider.call(messages);
+
+    expect(client._startChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        history: [
+          { role: "user", parts: [{ text: "First" }] },
+          { role: "model", parts: [{ text: "Response" }] },
+        ],
+      }),
+    );
+    expect(client._sendMessage).toHaveBeenCalledWith("Second");
+  });
+
+  it("extracts system instruction separately", async () => {
+    const client = mockGoogleClient('{"ok": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    const messages: Message[] = [
+      { role: "system", content: "Be helpful." },
+      { role: "user", content: "Hello" },
+    ];
+
+    await provider.call(messages);
+
+    expect(client._startChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemInstruction: {
+          role: "user",
+          parts: [{ text: "Be helpful." }],
+        },
+        history: [],
+      }),
+    );
+  });
+
+  it("returns the response text", async () => {
+    const client = mockGoogleClient('{"name": "Alice"}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    const result = await provider.call([
+      { role: "user", content: "Hello" },
+    ]);
+
+    expect(result).toBe('{"name": "Alice"}');
+  });
+
+  it("throws on empty response", async () => {
+    const client = mockGoogleClient("");
+    const provider = google(client, "gemini-2.0-flash");
+
+    await expect(
+      provider.call([{ role: "user", content: "Hello" }]),
+    ).rejects.toThrow("Google returned an empty response");
+  });
+
+  it("throws when no user message provided", async () => {
+    const client = mockGoogleClient('{"ok": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    await expect(
+      provider.call([{ role: "system", content: "System only" }]),
+    ).rejects.toThrow("No user message provided");
+  });
+
+  it("passes temperature and maxOutputTokens to generationConfig", async () => {
+    const client = mockGoogleClient('{"ok": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    await provider.call([{ role: "user", content: "Hello" }], {
+      temperature: 0.5,
+      maxTokens: 2000,
+    });
+
+    expect(client.getGenerativeModel).toHaveBeenCalledWith({
+      model: "gemini-2.0-flash",
+      generationConfig: {
+        temperature: 0.5,
+        maxOutputTokens: 2000,
+      },
+    });
+  });
+
+  it("omits systemInstruction when no system message", async () => {
+    const client = mockGoogleClient('{"ok": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    await provider.call([{ role: "user", content: "Hello" }]);
+
+    expect(client._startChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemInstruction: undefined,
+      }),
+    );
+  });
+
+  it("handles single user message with no history", async () => {
+    const client = mockGoogleClient('{"single": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    await provider.call([{ role: "user", content: "Just one" }]);
+
+    expect(client._startChat).toHaveBeenCalledWith(
+      expect.objectContaining({ history: [] }),
+    );
+    expect(client._sendMessage).toHaveBeenCalledWith("Just one");
+  });
+});
