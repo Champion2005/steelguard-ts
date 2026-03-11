@@ -1,14 +1,54 @@
 /**
- * steelguard-ts
- * Zero-latency deterministic validation and native JSON repair for Agentic LLM applications.
+ * # steelguard-ts
+ *
+ * Zero-latency deterministic validation and native JSON repair for Agentic
+ * LLM applications.
+ *
+ * ## Quick Start
+ *
+ * ```ts
+ * import { z } from 'zod';
+ * import { guard } from 'steelguard-ts';
+ *
+ * const UserSchema = z.object({
+ *   name: z.string(),
+ *   age:  z.number(),
+ * });
+ *
+ * // Raw LLM output — markdown-wrapped with a trailing comma:
+ * const raw = '```json\n{"name": "Alice", "age": 30,}\n```';
+ *
+ * const result = guard(raw, UserSchema);
+ *
+ * if (result.success) {
+ *   console.log(result.data);       // { name: "Alice", age: 30 }
+ *   console.log(result.isRepaired); // true
+ *   console.log(result.telemetry);  // { durationMs: 0.4, status: "repaired_natively" }
+ * } else {
+ *   // Append result.retryPrompt to your LLM message array for a corrective retry.
+ *   console.log(result.retryPrompt);
+ *   console.log(result.errors);     // ZodIssue[]
+ * }
+ * ```
+ *
+ * ## Exports
+ *
+ * | Export | Kind | Description |
+ * |--------|------|-------------|
+ * | {@link guard} | Function | The main entry-point — parse, repair, validate.  |
+ * | {@link GuardResult} | Type | Discriminated union returned by `guard()`. |
+ * | {@link GuardSuccess} | Type | The success branch of `GuardResult`. |
+ * | {@link GuardFailure} | Type | The failure branch of `GuardResult`. |
+ * | {@link TelemetryData} | Type | Timing and status metadata. |
+ *
+ * @packageDocumentation
  */
 
-export function repairJSON(input: string): string {
-  // TODO: Implement JSON repair logic
-  throw new Error("Not implemented yet");
-}
+export { guard } from "./guard.js";
+export type {
+  GuardResult,
+  GuardSuccess,
+  GuardFailure,
+  TelemetryData,
+} from "./types.js";
 
-export function validateJSON<T>(input: string, schema: any): T {
-  // TODO: Implement JSON validation with Zod
-  throw new Error("Not implemented yet");
-}
