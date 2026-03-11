@@ -3,11 +3,42 @@ import { z } from "zod";
 import { generateRetryPrompt } from "../../src/retry/index.js";
 
 describe("generateRetryPrompt", () => {
-  it("returns generic prompt for empty errors array", () => {
+  // -----------------------------------------------------------------------
+  // Parse failures (empty errors array)
+  // -----------------------------------------------------------------------
+
+  it("returns parse-failure prompt for empty errors with no snippet", () => {
     const prompt = generateRetryPrompt([]);
-    expect(prompt).toContain("failed validation");
-    expect(prompt).toContain("Return ONLY valid JSON");
+    expect(prompt).toContain("could not be parsed as JSON");
+    expect(prompt).toContain("schema is still in your context");
+    expect(prompt).toContain("return ONLY valid JSON");
   });
+
+  it("includes raw snippet in parse-failure prompt", () => {
+    const raw = '{name: Alice, age:}';
+    const prompt = generateRetryPrompt([], raw);
+    expect(prompt).toContain("could not be parsed as JSON");
+    expect(prompt).toContain(raw);
+    expect(prompt).toContain("schema is still in your context");
+  });
+
+  it("truncates long raw snippets to 300 characters", () => {
+    const raw = "x".repeat(400);
+    const prompt = generateRetryPrompt([], raw);
+    expect(prompt).toContain("x".repeat(300));
+    expect(prompt).toContain("…");
+    expect(prompt.length).toBeLessThan(450);
+  });
+
+  it("treats empty string rawSnippet as no snippet", () => {
+    const prompt = generateRetryPrompt([], "");
+    expect(prompt).toContain("could not be parsed as JSON");
+    expect(prompt).not.toContain("Got:");
+  });
+
+  // -----------------------------------------------------------------------
+  // Validation failures (Zod errors)
+  // -----------------------------------------------------------------------
 
   it("formats a single error with path and expected/received", () => {
     const errors: z.ZodIssue[] = [
@@ -20,10 +51,12 @@ describe("generateRetryPrompt", () => {
       },
     ];
     const prompt = generateRetryPrompt(errors);
+    expect(prompt).toContain("failed schema validation");
     expect(prompt).toContain("Path: /user/age");
     expect(prompt).toContain("Expected: number");
     expect(prompt).toContain("Received: string");
-    expect(prompt).toContain("Return ONLY valid JSON");
+    expect(prompt).toContain("schema is still in your context");
+    expect(prompt).toContain("return ONLY corrected valid JSON");
   });
 
   it("formats multiple errors", () => {
@@ -86,8 +119,8 @@ describe("generateRetryPrompt", () => {
       },
     ];
     const prompt = generateRetryPrompt(errors);
-    // Should be concise — less than 200 characters for a single error
-    expect(prompt.length).toBeLessThan(200);
+    // Should be concise — less than 250 characters for a single error
+    expect(prompt.length).toBeLessThan(250);
   });
 
   it("handles root-level path", () => {

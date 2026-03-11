@@ -1,50 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Play, RotateCcw, ChevronDown, CheckCircle2, XCircle, Clock, Sparkles } from 'lucide-react'
+import { demoPresets } from './demo-presets'
 
-const presets: Record<string, { label: string; desc: string; input: string; schema: string }> = {
-  markdown: {
-    label: 'Markdown Wrapper',
-    desc: 'JSON wrapped in ```json fences',
-    input: '```json\n{"name": "Alice", "age": 30}\n```',
-    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n})`,
-  },
-  trailing: {
-    label: 'Trailing Commas',
-    desc: 'Common LLM mistake',
-    input: '{"name": "Bob", "age": 25, "active": true,}',
-    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n  active: z.boolean(),\n})`,
-  },
-  unquoted: {
-    label: 'Unquoted Keys',
-    desc: 'JS-style object notation',
-    input: '{name: "Charlie", age: 35}',
-    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n})`,
-  },
-  truncated: {
-    label: 'Truncated Output',
-    desc: 'Hit max_tokens mid-response',
-    input: '{"users": [{"name": "Alice", "age": 30}, {"name": "Bob"',
-    schema: `z.object({\n  users: z.array(z.object({\n    name: z.string(),\n    age: z.number().optional(),\n  })),\n})`,
-  },
-  conversational: {
-    label: 'Conversational Wrapper',
-    desc: 'JSON buried in chat text',
-    input: 'Sure! Here is the data you requested:\n\n{"city": "London", "population": 8982000}\n\nLet me know if you need anything else!',
-    schema: `z.object({\n  city: z.string(),\n  population: z.number(),\n})`,
-  },
-  coercion: {
-    label: 'Type Coercion',
-    desc: 'String values need casting',
-    input: '{"name": "Diana", "age": "28", "active": "true"}',
-    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n  active: z.boolean(),\n})`,
-  },
-  failure: {
-    label: 'Validation Failure',
-    desc: 'Missing required fields',
-    input: '{"name": "Eve"}',
-    schema: `z.object({\n  name: z.string(),\n  age: z.number(),\n  email: z.string(),\n})`,
-  },
-}
+const presets = demoPresets
 
 type GuardResultAny =
   | { success: true; data: unknown; telemetry: { durationMs: number; status: string }; isRepaired: boolean }

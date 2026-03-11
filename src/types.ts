@@ -43,6 +43,11 @@ export interface GuardFailure {
   /**
    * A token-efficient prompt you can append to your LLM message array
    * to request a corrected response.
+   *
+   * The prompt assumes the LLM still has the original schema in its
+   * conversation context — it never re-sends the full schema, only
+   * describes what was wrong (parse error with raw snippet, or validation
+   * errors with exact paths and expected types).
    */
   retryPrompt: string;
   /** The Zod validation issues (empty when JSON parsing itself failed). */

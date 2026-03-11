@@ -27,6 +27,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Internal plans (not tracked)
+.internal/
+
 # Logs
 logs/
 *.log

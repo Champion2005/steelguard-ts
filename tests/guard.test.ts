@@ -138,8 +138,8 @@ Let me know if you need anything else!`;
     expect(r.success).toBe(false);
     if (!r.success) {
       expect(r.telemetry.status).toBe("failed");
-      expect(r.retryPrompt).toContain("failed validation");
-      expect(r.retryPrompt).toContain("Return ONLY valid JSON");
+      expect(r.retryPrompt).toContain("failed schema validation");
+      expect(r.retryPrompt).toContain("schema is still in your context");
       expect(r.errors.length).toBeGreaterThan(0);
     }
   });

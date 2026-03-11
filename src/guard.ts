@@ -84,7 +84,7 @@ export function guard<T extends ZodTypeAny>(
     };
     return {
       success: false,
-      retryPrompt: generateRetryPrompt([]),
+      retryPrompt: generateRetryPrompt([], parseResult.raw),
       errors: [],
       telemetry,
     };

@@ -11,9 +11,9 @@ applyTo: **
 
 **Tagline:** Raw LLM output reforged into clean data.
 
-**The Problem:** LLMs are probabilistic and frequently output malformed JSON (markdown wrappers, trailing commas, unquoted keys, truncated outputs). Network retries to providers (OpenAI, Anthropic) take 1-3 seconds and cost money.
+**The Problem:** LLMs are probabilistic and frequently output malformed JSON (markdown wrappers, trailing commas, unquoted keys, truncated outputs). Developers must manually integrate with each provider's SDK, handle retries themselves, and deal with different response formats across OpenAI, Anthropic, Google, OpenRouter, and dozens more.
 
-**The Solution:** A zero-dependency TypeScript library that sits between the LLM output and the application. It natively repairs syntactical errors in microseconds and strictly enforces semantic types via Zod.
+**The Solution:** A zero-dependency TypeScript library with an optional provider layer. The core `guard()` function natively repairs syntactical errors in microseconds and strictly enforces semantic types via Zod. The `forge()` function provides end-to-end structured output: call any LLM provider → guard → auto-retry — with a single unified API.
 
 ---
 
@@ -21,93 +21,176 @@ applyTo: **
 
 ### 2.1 Core Constraints
 
-- **Zero Dependencies:** Strictly zod as a peer/optional dependency. No lodash, no heavy AST parsers.
+- **Zero Dependencies (core):** The core `guard()` function has strictly zod as a peer/optional dependency. No lodash, no heavy AST parsers.
+- **Provider SDKs are Peer Dependencies:** Provider adapters (openai, anthropic, google) import the user's installed SDK. They are never bundled.
 - **Environment Agnostic:** Must run in Node.js, Cloudflare Workers, Vercel Edge, Bun, Deno, and the Browser. Do not use Node-specific APIs (fs, path, Buffer).
-- **Performance Bound:** The end-to-end guard() function must execute in under 5ms for a 2KB string.
+- **Performance Bound:** The `guard()` function must execute in under 5ms for a 2KB string. The `forge()` function is async (network-bound) but adds negligible overhead beyond the LLM call itself.
+- **No Global State:** All functions are pure or accept explicit configuration. No singletons, no module-level mutation.
 
-### 2.2 Feature 1: The Dirty Parser (Native Syntactic Repair)
+### 2.2 Architecture: Two Layers
 
-This is the "magic" layer. It takes raw text and attempts to yield a valid JS object.
+```
+┌─────────────────────────────────────────────────┐
+│  forge() — End-to-end structured LLM output     │  ← NEW (async, optional)
+│  Provider Adapters (OpenAI, Anthropic, Google)   │
+├─────────────────────────────────────────────────┤
+│  guard() — Core repair + validation engine       │  ← EXISTING (sync, zero-dep)
+│  Dirty Parser → Zod Validation → Telemetry       │
+└─────────────────────────────────────────────────┘
+```
 
-- **Markdown Extraction:** LLMs often wrap JSON in ```json blocks or add conversational text ("Here is the data:"). The parser must locate the first { or [ and the last corresponding } or ].
-- **Stack-Based Bracket Balancing:** If the LLM output is truncated (e.g., hits max_tokens), the parser must use a stack to append the necessary closing brackets/braces to make the JSON structurally valid.
-- **Common Heuristic Fixes:**
-  - Strip trailing commas: {"a": 1,} -> {"a": 1}
-  - Fix unquoted keys: {name: "John"} -> {"name": "John"}
-  - Handle escaped quote anomalies (e.g., improperly unescaping inner quotes like {\"key\": \"value\"} which breaks standard JSON.parse).
+**Layer 1 (Core):** `guard()` — synchronous, zero-dependency, pure string → validated data. Already built and shipped as v0.1.0.
 
-### 2.3 Feature 2: Semantic Enforcement (Zod)
+**Layer 2 (Providers):** `forge()` — async, wraps provider SDK calls with `guard()` and automatic retry loops. Requires the user's provider SDK as a peer dependency.
 
-Once structurally valid, the object must match the business logic.
+### 2.3 Existing Core Features (guard)
 
-- Takes the user's ZodSchema and runs .safeParse().
-- **Shimming/Coercion:** If the schema allows, attempt to coerce types (e.g., string "true" to boolean true) before failing the validation.
+These are built and stable. Do not break them.
 
-### 2.4 Feature 3: The Provider-Agnostic Retry Generator
+- **Dirty Parser:** Markdown extraction, stack-based bracket balancing, heuristic fixes (trailing commas, unquoted keys, escaped quotes, single quotes).
+- **Semantic Enforcement:** Zod `.safeParse()` with automatic type coercion (string→boolean, string→number, string→null).
+- **Retry Prompt Generator:** Token-efficient retry prompt with mapped Zod issues.
+- **Telemetry:** `{ durationMs, status: 'clean' | 'repaired_natively' | 'failed' }`.
 
-If semantic validation completely fails (e.g., a required key is missing), Reforge does not make a network request.
+### 2.4 New Feature: Provider Adapters & forge()
 
-- It generates a highly optimized retryPrompt string.
-- **Format:** "Your previous response failed validation. Errors: [Path: /user/age, Expected: Number]. Return ONLY valid JSON matching the schema." Ensure Zod issues are mapped and flattened into this concise string format to save LLM context tokens.
-- Returns this string to the developer in the payload so they can append it to their LLM message array.
-
-### 2.5 Feature 4: Telemetry & Developer UX
-
-- **Context Object:** Every result must return a telemetry object: { durationMs: 1.2, status: 'repaired_natively' | 'clean' | 'failed' }.
-
-**API Signature:**
+**Provider Adapter Interface:**
 
 ```typescript
+interface ReforgeProvider {
+  call(messages: Message[], options?: ProviderCallOptions): Promise<string>;
+}
+```
+
+Each adapter implements this interface by wrapping the respective SDK's chat completion call and extracting the text content from the response.
+
+**Built-in Adapters:**
+
+| Adapter | Covers | Peer Dependency |
+|---------|--------|-----------------|
+| `openai()` | OpenAI, OpenRouter, Together, Groq, Fireworks, Perplexity, Ollama, LM Studio, vLLM, any OpenAI-compatible API | `openai` |
+| `anthropic()` | Direct Anthropic API | `@anthropic-ai/sdk` |
+| `google()` | Google Gemini / Vertex AI | `@google/generative-ai` |
+
+The OpenAI adapter works with ANY OpenAI-compatible provider because the user passes their own pre-configured client (with custom `baseURL` and API key already set). Reforge never manages credentials.
+
+**The `forge()` Function:**
+
+```typescript
+async function forge<T extends z.ZodTypeAny>(
+  provider: ReforgeProvider,
+  messages: Message[],
+  schema: T,
+  options?: ForgeOptions
+): Promise<ForgeResult<z.infer<T>>>
+```
+
+**Behavior:**
+1. Calls the provider with the user's messages
+2. Pipes the raw response string through `guard()`
+3. If `guard()` succeeds → return the validated data
+4. If `guard()` fails → append the `retryPrompt` to messages, call the provider again
+5. Repeat up to `maxRetries` (default: 3)
+6. If all retries exhausted → return failure with accumulated errors
+
+**Custom Providers:** Users can implement `ReforgeProvider` directly for any provider not covered by built-ins. This is a single method interface — trivial to implement.
+
+### 2.5 Export Structure
+
+```
+reforge-ai                    # Core (guard, types) — zero deps
+reforge-ai/openai             # OpenAI adapter — peer: openai
+reforge-ai/anthropic          # Anthropic adapter — peer: @anthropic-ai/sdk
+reforge-ai/google             # Google adapter — peer: @google/generative-ai
+```
+
+Each sub-path export is tree-shakeable. Users who only use `guard()` import nothing extra.
+
+### 2.6 API Signatures (Complete)
+
+```typescript
+// ── Core (existing) ──
 export function guard<T extends z.ZodTypeAny>(
   llmOutput: string,
   schema: T
 ): GuardResult<z.infer<T>>
 
-// Expected Return Types:
 export type GuardResult<T> =
   | { success: true; data: T; telemetry: TelemetryData; isRepaired: boolean }
   | { success: false; retryPrompt: string; errors: z.ZodIssue[]; telemetry: TelemetryData };
 
-export type TelemetryData = { durationMs: number; status: 'clean' | 'repaired_natively' | 'failed'; };
+export type TelemetryData = { durationMs: number; status: 'clean' | 'repaired_natively' | 'failed' };
+
+// ── Provider Layer (new) ──
+export interface ReforgeProvider {
+  call(messages: Message[], options?: ProviderCallOptions): Promise<string>;
+}
+
+export interface Message {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface ForgeOptions {
+  maxRetries?: number;         // Default: 3
+  providerOptions?: ProviderCallOptions;
+}
+
+export interface ProviderCallOptions {
+  temperature?: number;
+  maxTokens?: number;
+  [key: string]: unknown;      // Pass-through for provider-specific options
+}
+
+export type ForgeResult<T> =
+  | { success: true; data: T; telemetry: ForgeTelemetry; isRepaired: boolean }
+  | { success: false; errors: z.ZodIssue[]; telemetry: ForgeTelemetry };
+
+export interface ForgeTelemetry extends TelemetryData {
+  attempts: number;
+  totalDurationMs: number;
+}
+
+// ── Adapter factories (new) ──
+export function openai(client: OpenAIClient, model: string): ReforgeProvider;
+export function anthropic(client: AnthropicClient, model: string): ReforgeProvider;
+export function google(client: GoogleClient, model: string): ReforgeProvider;
 ```
 
 ---
 
 ## 3. The Web Platform (Marketing, Demo, Docs, Blog)
 
-### 3.1 Tech Stack Recommendations
+### 3.1 Tech Stack
 
-- **Framework:** Next.js (App Router).
-- **Styling:** Tailwind CSS + Shadcn UI (for fast, clean, dark-mode default components).
-- **Docs/Blog Engine:** Fumadocs or Nextra (Allows Markdown with embedded React components for the interactive demo).
-- **Hosting:** Vercel (free, edge-native).
+- **Framework:** Vite + React (SPA).
+- **Styling:** Tailwind CSS v4.
+- **Routing:** react-router-dom.
+- **Hosting:** Firebase Hosting.
+- **Demo:** Client-side — imports the actual library, runs `guard()` in the browser.
 
-### 3.2 Landing Page Strategy
+### 3.2 Landing Page
 
-- **Hero Section:** "Stop paying for LLM retries." Clear code snippet showing the simple guard() implementation.
-- **Value Prop Grid:** Zero dependencies, Edge-ready, Zod native, Microsecond latency.
-- **The "Proof" Interactive Demo:** A split-screen React component right on the homepage.
-  - **Left Pane (Input):** A text editor where the user can type "dirty" LLM output. Include a dropdown or buttons with "Pre-loaded Examples" (e.g., 'Truncated Output', 'Markdown Wrapper', 'Trailing Commas') for quick testing.
-  - **Right Pane (Output):** Real-time formatted JSON and the telemetry.durationMs displayed in green (e.g., "Repaired in 0.8ms").
-- **Architecture:** Because reforge is browser-compatible, this demo imports the actual library and runs it client-side. No API required.
+- **Hero Section:** "Stop paying for LLM retries." with code snippet showing `guard()` and `forge()`.
+- **Value Prop Grid:** Zero dependencies, Edge-ready, Zod native, Microsecond latency, Any LLM Provider.
+- **Interactive Demo:** Split-screen with dirty input → repaired output + telemetry.
+- **Provider Showcase:** Visual grid showing all supported providers (OpenAI, Anthropic, Google, OpenRouter, Groq, Together, etc.) with a single unified API.
 
 ### 3.3 Documentation Hub
 
-The docs must be generated alongside the code to prevent drift.
-
-- **Setup Guide:** Install instructions for NPM/Yarn/PNPM.
-- **Concepts:** Explaining the "Dirty Parser" vs "Semantic Validation".
-- **API Reference:** Auto-generated from JSDoc comments in the TypeScript source using typedoc and converted to Markdown for the docs site.
+- **Setup Guide:** NPM/Yarn/PNPM install instructions.
+- **Concepts:** Dirty Parser, Semantic Validation, Provider Adapters.
+- **API Reference:** `guard()`, `forge()`, adapter factories, types.
 - **Cookbooks/Examples:**
-  - Next.js API Route integration.
-  - OpenAI SDK integration.
-  - Anthropic SDK integration.
+  - OpenAI direct integration.
+  - Anthropic direct integration.
+  - Google Gemini integration.
+  - OpenRouter (using OpenAI adapter with custom baseURL).
+  - Custom provider implementation.
+  - Next.js Edge API Route.
+  - Retry strategy patterns.
 
-### 3.4 The SEO Blog
-
-Dev-tools require high-intent search traffic. The blog must exist to capture long-tail keywords.
-
-**Initial Content Strategy:**
+### 3.4 SEO Blog
 
 - "How to enforce JSON schemas with OpenAI in 2026."
 - "Why JSON Schema prompts fail: The case for native repair."
@@ -115,32 +198,28 @@ Dev-tools require high-intent search traffic. The blog must exist to capture lon
 
 ---
 
-## 4. Execution Roadmap (Anti-Scope-Creep Plan)
+## 4. Current State & What's Next
 
-To ensure this project actually launches, execute in this strict order:
+### Completed (v0.1.0)
 
-### Phase 1: The Core Engine
+- Core `guard()` function with full dirty parser pipeline
+- Zod validation with type coercion
+- Retry prompt generator
+- Telemetry
+- 100% test coverage (Vitest)
+- Published to NPM as `reforge-ai`
+- Website live: landing page, interactive demo, docs, blog
 
-- Init pure TypeScript project (tsup for bundling to CJS/ESM).
-- Build the DirtyParser string manipulation heuristics.
-- Build the Zod wrapper and standard response types.
-- Achieve 100% test coverage on messy LLM string edge-cases using Vitest.
+### Next: Provider Layer (v0.2.0)
 
-### Phase 2: The Package Release
+Detailed task breakdown is in `.internal/plans.md` (not tracked in git). High-level:
 
-- Finalize JSDoc comments.
-- Publish v0.1.0 to NPM.
-- Write a informative README.md.
-
-### Phase 3: The Web Platform
-
-- Init Vite + Fumadocs workspace.
-- Build the Interactive React Demo component using the published v0.1.0 package.
-- Port README.md into the Docs section.
-- Launch the landing page (must have good frontend design).
-
-### Phase 4: Content & Scale
-
-- Write the first 3 blog posts.
-- Share the Interactive Demo on X/Twitter and HackerNews.
-- Monitor GitHub issues for edge-cases the Dirty Parser missed.
+1. Define provider interfaces and types (`src/providers/types.ts`)
+2. Implement `forge()` orchestrator with retry loop (`src/providers/forge.ts`)
+3. Build OpenAI adapter (`src/providers/openai.ts`)
+4. Build Anthropic adapter (`src/providers/anthropic.ts`)
+5. Build Google Gemini adapter (`src/providers/google.ts`)
+6. Configure sub-path exports in package.json and tsup
+7. Full test coverage for all adapters and forge()
+8. Update website: docs, demo examples, provider showcase
+9. Publish v0.2.0 to NPM

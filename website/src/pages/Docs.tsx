@@ -219,11 +219,29 @@ export default function Docs() {
               Instead of paying for expensive network retries (1-3 seconds each), Reforge repairs these issues <strong className="text-foreground">deterministically in microseconds</strong> on your side. When repair isn't enough, it generates a token-efficient retry prompt you can feed back to the model.
             </p>
             <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
-              <p className="text-sm font-semibold text-foreground mb-3">What Reforge does:</p>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex gap-2"><span className="text-primary font-bold">1.</span> <strong className="text-foreground">Parses & Repairs</strong> — Fixes markdown fences, trailing commas, unquoted keys, single quotes, escaped quote anomalies, and truncated brackets.</li>
-                <li className="flex gap-2"><span className="text-primary font-bold">2.</span> <strong className="text-foreground">Validates & Coerces</strong> — Runs your Zod schema with automatic type coercion (e.g., string <InlineCode>"true"</InlineCode> → boolean <InlineCode>true</InlineCode>).</li>
-                <li className="flex gap-2"><span className="text-primary font-bold">3.</span> <strong className="text-foreground">Generates Retry Prompts</strong> — When validation fails, generates a targeted retry string with specific errors — no schema re-sending needed.</li>
+              <p className="text-sm font-semibold text-foreground mb-4">What Reforge does:</p>
+              <ul className="space-y-5 text-sm text-muted-foreground">
+                <li className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-primary font-bold flex-shrink-0">1.</span>
+                    <strong className="text-foreground">Parses & Repairs</strong>
+                  </div>
+                  <div className="pl-6 text-muted-foreground">Fixes markdown fences, trailing commas, unquoted keys, single quotes, escaped quote anomalies, and truncated brackets.</div>
+                </li>
+                <li className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-primary font-bold flex-shrink-0">2.</span>
+                    <strong className="text-foreground">Validates & Coerces</strong>
+                  </div>
+                  <div className="pl-6 text-muted-foreground">Runs your Zod schema with automatic type coercion (e.g., string <InlineCode>"true"</InlineCode> → boolean <InlineCode>true</InlineCode>).</div>
+                </li>
+                <li className="flex flex-col gap-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-primary font-bold flex-shrink-0">3.</span>
+                    <strong className="text-foreground">Generates Retry Prompts</strong>
+                  </div>
+                  <div className="pl-6 text-muted-foreground">When validation fails, generates a targeted retry string with specific errors — no schema re-sending needed.</div>
+                </li>
               </ul>
             </div>
             <p className="text-muted-foreground leading-relaxed">
@@ -373,23 +391,30 @@ export default function Docs() {
           <div id="retry" className="scroll-mt-24 space-y-4">
             <SectionHeader>Retry Strategy</SectionHeader>
             <p className="text-muted-foreground leading-relaxed">
-              Reforge generates a concise retry prompt that includes the
-              specific validation errors flattened into a single string. This is
-              designed to be appended directly to your LLM message array.
+              When <InlineCode>guard()</InlineCode> fails it returns a <InlineCode>retryPrompt</InlineCode> string
+              ready to append to your LLM message array. The prompt <strong className="text-foreground">assumes the LLM still has your schema in its conversation context</strong> — it never re-sends the schema, only describes exactly what was wrong with the previous response.
             </p>
-            <div className="rounded-xl border border-border/60 bg-card/30 p-6 text-sm">
-              <p className="font-semibold text-foreground">Example retry prompt:</p>
-              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap font-mono text-[13px] leading-6 text-muted-foreground">
-                Your previous response failed validation. Errors: [Path: /age,
-                Expected: number, Received: undefined], [Path: /email, Expected:
-                string, Received: undefined]. Return ONLY valid JSON matching
-                the schema.
-              </pre>
+            <p className="text-muted-foreground leading-relaxed">
+              There are two distinct failure modes, each producing a different prompt:
+            </p>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-border/60 bg-card/30 p-5 text-sm">
+                <p className="font-semibold text-foreground mb-1">Parse failure <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">errors: []</span></p>
+                <p className="text-xs text-muted-foreground mb-3">The LLM returned something that couldn't be extracted as JSON at all. The offending text is echoed back verbatim so the LLM knows exactly what it produced.</p>
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-[oklch(0.13_0.005_286)] p-3.5 font-mono text-[13px] leading-6 text-muted-foreground">
+{`Your previous response could not be parsed as JSON. Got: \`Sure! Here is your data: name Alice age 30...\`. The schema is still in your context — return ONLY valid JSON.`}
+                </pre>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-card/30 p-5 text-sm">
+                <p className="font-semibold text-foreground mb-1">Validation failure <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">errors: ZodIssue[]</span></p>
+                <p className="text-xs text-muted-foreground mb-3">JSON parsed successfully but didn't satisfy the schema. Each broken field is reported with its exact path, expected type, and received type.</p>
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg border border-border/40 bg-[oklch(0.13_0.005_286)] p-3.5 font-mono text-[13px] leading-6 text-muted-foreground">
+{`Your previous response failed schema validation. Errors: [Path: /age, Expected: number, Received: string]; [Path: /email, Expected: string, Received: undefined]. The schema is still in your context — return ONLY corrected valid JSON.`}
+                </pre>
+              </div>
             </div>
             <p className="text-muted-foreground leading-relaxed">
-              The retry prompt is token-efficient by design — it only includes
-              the paths and types that failed, not the full schema. This saves
-              context tokens and keeps the conversation concise.
+              Because the schema is assumed to be in context, the prompt stays minimal — only the specific paths and types that failed are included, never the full schema definition. This saves tokens and avoids inflating your context window on retries.
             </p>
           </div>
 
