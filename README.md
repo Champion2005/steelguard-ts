@@ -3,7 +3,7 @@
 **Raw LLM output reforged into clean data.**
 
 [![npm version](https://img.shields.io/npm/v/reforge-ai.svg)](https://www.npmjs.com/package/reforge-ai)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg)](https://www.typescriptlang.org)
 
 ---
