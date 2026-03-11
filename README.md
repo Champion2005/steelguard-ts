@@ -106,7 +106,13 @@ After parsing, the data is validated against your Zod schema. Reforge also attem
 If validation fails, Reforge generates a token-efficient prompt you can append to your LLM conversation:
 
 ```
-Your previous response failed validation. Errors: [Path: /user/age, Expected: number, Received: string]. Return ONLY valid JSON matching the schema.
+Your previous response failed schema validation. Errors: [Path: /user/age, Expected: number, Received: string]. The schema is still in your context — return ONLY corrected valid JSON.
+```
+
+When the LLM returns something that can't be parsed as JSON at all, the raw text is echoed back:
+
+```
+Your previous response could not be parsed as JSON. Got: `Sure! Here is your data...`. The schema is still in your context — return ONLY valid JSON.
 ```
 
 No network requests. No retries. Just a string you feed back.

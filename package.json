@@ -1,6 +1,6 @@
 {
   "name": "reforge-ai",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Raw LLM output reforged into clean data. Zero-latency deterministic validation and native JSON repair.",
   "type": "module",
   "main": "./dist/index.cjs",
