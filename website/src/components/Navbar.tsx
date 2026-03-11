@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { SiGithub } from 'react-icons/si'
 import { useState } from 'react'
-import reforge_logo from "/reforge.svg"
+import reforge_logo from "../assets/reforge.svg"
 
 const navLinks = [
   { to: '/', label: 'Home' },
@@ -17,17 +17,18 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur-xl">
-      <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <nav className="flex h-16 items-center px-6 sm:px-10">
+        {/* Left — Logo */}
         <Link
           to="/"
-          className="flex items-center gap-2.5 font-semibold tracking-tight text-foreground"
+          className="flex items-center gap-3 text-lg font-semibold tracking-tight text-foreground"
         >
-            <img src={reforge_logo} alt="Refoge logo" className="h-8 w-8" />
+          <img src={reforge_logo} alt="Reforge logo" className="h-9 w-9" />
           Reforge
         </Link>
 
-        {/* Desktop */}
-        <div className="hidden items-center gap-1 sm:flex">
+        {/* Center — Nav links */}
+        <div className="hidden flex-1 items-center justify-center gap-1 sm:flex">
           {navLinks.map((link) => (
             <Link
               key={link.to}
@@ -41,19 +42,33 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
-          <div className="ml-3 h-5 w-px bg-border" />
+        </div>
+
+        {/* Right — External links */}
+        <div className="hidden items-center gap-3 sm:flex">
+          <a
+            href="https://www.npmjs.com/package/reforge-ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-md px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            npm
+          </a>
           <a
             href="https://github.com/Champion2005/reforge"
+            target="_blank"
+            rel="noopener noreferrer"
             aria-label="GitHub repository"
+            className="text-muted-foreground transition-colors hover:text-foreground"
           >
-            <SiGithub className="h-4.5 w-4.5" />
+            <SiGithub className="h-5 w-5" />
           </a>
         </div>
 
         {/* Mobile toggle */}
         <button
           onClick={() => setOpen(!open)}
-          className="rounded-md p-2 text-muted-foreground hover:bg-muted sm:hidden"
+          className="ml-auto rounded-md p-2 text-muted-foreground hover:bg-muted sm:hidden"
           aria-label="Toggle menu"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -77,6 +92,14 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          <a
+            href="https://www.npmjs.com/package/reforge-ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-md px-3 py-2 text-sm text-muted-foreground"
+          >
+            npm
+          </a>
           <a
             href="https://github.com/Champion2005/reforge"
             target="_blank"

@@ -1,4 +1,4 @@
-import reforge_logo from '/reforge.svg'
+import reforge_logo from '../assets/reforge.svg'
 
 export default function Footer() {
   return (
