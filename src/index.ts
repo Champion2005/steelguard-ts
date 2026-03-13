@@ -51,6 +51,15 @@ export type {
   GuardSuccess,
   GuardFailure,
   TelemetryData,
+  GuardOptions,
+  GuardProfile,
+  GuardHeuristicOptions,
+  GuardDebugArtifacts,
+  RetryPromptOptions,
+  RetryPromptMode,
+  RetryPromptContextBlock,
+  RetryPromptStrategy,
+  RetryPromptStrategyInput,
 } from "./types.js";
 export type {
   Message,

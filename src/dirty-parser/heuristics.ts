@@ -1,5 +1,14 @@
 import type { HeuristicResult } from "../types.js";
 
+export interface HeuristicPassOptions {
+  escapedQuotes?: boolean;
+  singleQuotes?: boolean;
+  stripComments?: boolean;
+  normalizePythonLiterals?: boolean;
+  unquotedKeys?: boolean;
+  trailingCommas?: boolean;
+}
+
 /**
  * Apply common syntactic heuristics to repair malformed JSON strings.
  *
@@ -26,72 +35,107 @@ import type { HeuristicResult } from "../types.js";
  * // => { result: '{"name": "John"}', applied: true }
  * ```
  */
-export function applyHeuristics(input: string): HeuristicResult {
+export function applyHeuristics(
+  input: string,
+  options?: HeuristicPassOptions,
+): HeuristicResult {
   if (input.length === 0) {
     return { result: input, applied: false };
   }
 
   let current = input;
   let anyApplied = false;
+  const appliedRepairs: string[] = [];
+
+  const passes: Required<HeuristicPassOptions> = {
+    escapedQuotes: options?.escapedQuotes ?? true,
+    singleQuotes: options?.singleQuotes ?? true,
+    stripComments: options?.stripComments ?? true,
+    normalizePythonLiterals: options?.normalizePythonLiterals ?? true,
+    unquotedKeys: options?.unquotedKeys ?? true,
+    trailingCommas: options?.trailingCommas ?? true,
+  };
 
   // --- Pass 1: Fix escaped-quote wrappers (must run first) ---
-  const unescaped = fixEscapedQuotes(current);
-  if (unescaped !== current) {
-    current = unescaped;
-    anyApplied = true;
-    if (canParseJson(current)) {
-      return { result: current, applied: true };
+  if (passes.escapedQuotes) {
+    const unescaped = fixEscapedQuotes(current);
+    if (unescaped !== current) {
+      current = unescaped;
+      anyApplied = true;
+      appliedRepairs.push("fix_escaped_quotes");
+      if (canParseJson(current)) {
+        return { result: current, applied: true, appliedRepairs };
+      }
     }
   }
 
   // --- Pass 2: Fix single-quoted strings → double-quoted ---
-  const dqResult = fixSingleQuotes(current);
-  if (dqResult !== current) {
-    current = dqResult;
-    anyApplied = true;
-    if (canParseJson(current)) {
-      return { result: current, applied: true };
+  if (passes.singleQuotes) {
+    const dqResult = fixSingleQuotes(current);
+    if (dqResult !== current) {
+      current = dqResult;
+      anyApplied = true;
+      appliedRepairs.push("fix_single_quotes");
+      if (canParseJson(current)) {
+        return { result: current, applied: true, appliedRepairs };
+      }
     }
   }
 
   // --- Pass 3: Strip JS-style comments ---
-  const commentResult = stripJsComments(current);
-  if (commentResult !== current) {
-    current = commentResult;
-    anyApplied = true;
-    if (canParseJson(current)) {
-      return { result: current, applied: true };
+  if (passes.stripComments) {
+    const commentResult = stripJsComments(current);
+    if (commentResult !== current) {
+      current = commentResult;
+      anyApplied = true;
+      appliedRepairs.push("strip_js_comments");
+      if (canParseJson(current)) {
+        return { result: current, applied: true, appliedRepairs };
+      }
     }
   }
 
   // --- Pass 4: Normalize Python literals ---
-  const pyResult = normalizePythonLiterals(current);
-  if (pyResult !== current) {
-    current = pyResult;
-    anyApplied = true;
-    if (canParseJson(current)) {
-      return { result: current, applied: true };
+  if (passes.normalizePythonLiterals) {
+    const pyResult = normalizePythonLiterals(current);
+    if (pyResult !== current) {
+      current = pyResult;
+      anyApplied = true;
+      appliedRepairs.push("normalize_python_literals");
+      if (canParseJson(current)) {
+        return { result: current, applied: true, appliedRepairs };
+      }
     }
   }
 
   // --- Pass 5: Fix unquoted keys ---
-  const uqResult = fixUnquotedKeys(current);
-  if (uqResult !== current) {
-    current = uqResult;
-    anyApplied = true;
-    if (canParseJson(current)) {
-      return { result: current, applied: true };
+  if (passes.unquotedKeys) {
+    const uqResult = fixUnquotedKeys(current);
+    if (uqResult !== current) {
+      current = uqResult;
+      anyApplied = true;
+      appliedRepairs.push("fix_unquoted_keys");
+      if (canParseJson(current)) {
+        return { result: current, applied: true, appliedRepairs };
+      }
     }
   }
 
   // --- Pass 6: Strip trailing commas ---
-  const tcResult = fixTrailingCommas(current);
-  if (tcResult !== current) {
-    current = tcResult;
-    anyApplied = true;
+  if (passes.trailingCommas) {
+    const tcResult = fixTrailingCommas(current);
+    if (tcResult !== current) {
+      current = tcResult;
+      anyApplied = true;
+      appliedRepairs.push("fix_trailing_commas");
+    }
   }
 
-  return { result: current, applied: anyApplied };
+  return {
+    result: current,
+    applied: anyApplied,
+    appliedRepairs: appliedRepairs.length > 0 ? appliedRepairs : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------

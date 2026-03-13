@@ -18,6 +18,59 @@ export interface TelemetryData {
   status: "clean" | "repaired_natively" | "failed";
 }
 
+export interface RetryPromptContextBlock {
+  startLine: number;
+  endLine: number;
+  text: string;
+}
+
+export type RetryPromptMode = "compact" | "line-aware";
+
+export interface RetryPromptOptions {
+  mode?: RetryPromptMode;
+  contextRadius?: number;
+  maxContextChars?: number;
+  includeLineNumbers?: boolean;
+  maxIssueBlocks?: number;
+  redactPaths?: string[];
+  redactRegex?: RegExp[];
+}
+
+export interface RetryPromptStrategyInput {
+  errors: ZodIssue[];
+  rawOutput?: string;
+  contextBlocks?: RetryPromptContextBlock[];
+}
+
+export type RetryPromptStrategy = (input: RetryPromptStrategyInput) => string;
+
+export type GuardProfile = "safe" | "standard" | "aggressive";
+
+export interface GuardHeuristicOptions {
+  escapedQuotes: boolean;
+  singleQuotes: boolean;
+  stripComments: boolean;
+  normalizePythonLiterals: boolean;
+  unquotedKeys: boolean;
+  trailingCommas: boolean;
+}
+
+export interface GuardOptions {
+  profile?: GuardProfile;
+  heuristics?: Partial<GuardHeuristicOptions>;
+  retryPrompt?: RetryPromptOptions;
+  retryPromptStrategy?: RetryPromptStrategy;
+  debug?: boolean;
+}
+
+export interface GuardDebugArtifacts {
+  extractedText?: string;
+  repairedText?: string;
+  appliedRepairs?: string[];
+  likelyErrorLine?: number;
+  retryContextBlocks?: RetryPromptContextBlock[];
+}
+
 /**
  * Returned when `guard()` succeeds — the LLM output has been parsed,
  * optionally repaired, and validated against the Zod schema.
@@ -32,6 +85,8 @@ export interface GuardSuccess<T> {
   telemetry: TelemetryData;
   /** `true` when the Dirty Parser had to repair the raw input before it could be parsed. */
   isRepaired: boolean;
+  /** Optional debug payload with repair artifacts. */
+  debug?: GuardDebugArtifacts;
 }
 
 /**
@@ -54,6 +109,8 @@ export interface GuardFailure {
   errors: ZodIssue[];
   /** Telemetry about the guard run. */
   telemetry: TelemetryData;
+  /** Optional debug payload with repair artifacts and context windows. */
+  debug?: GuardDebugArtifacts;
 }
 
 /**
@@ -80,8 +137,22 @@ export type GuardResult<T> = GuardSuccess<T> | GuardFailure;
 
 /** Result of the Dirty Parser stage. */
 export type ParseResult =
-  | { success: true; value: unknown; isRepaired: boolean }
-  | { success: false; raw: string };
+  | {
+      success: true;
+      value: unknown;
+      isRepaired: boolean;
+      extractedText?: string;
+      repairedText?: string;
+      appliedRepairs?: string[];
+    }
+  | {
+      success: false;
+      raw: string;
+      likelyErrorLine?: number;
+      extractedText?: string;
+      repairedText?: string;
+      appliedRepairs?: string[];
+    };
 
 /** Tracks which extraction / heuristic step modified the input. */
 export interface ExtractionResult {
@@ -92,6 +163,7 @@ export interface ExtractionResult {
 export interface HeuristicResult {
   result: string;
   applied: boolean;
+  appliedRepairs?: string[];
 }
 
 export interface BalanceResult {

@@ -1,5 +1,11 @@
 import type { ZodIssue, ZodTypeAny, infer as ZodInfer } from "zod";
-import type { GuardResult, TelemetryData } from "./types.js";
+import type {
+  GuardResult,
+  TelemetryData,
+  GuardOptions,
+  GuardHeuristicOptions,
+  RetryPromptContextBlock,
+} from "./types.js";
 import { dirtyParse } from "./dirty-parser/index.js";
 import { validateWithSchema } from "./validation/index.js";
 import { generateRetryPrompt } from "./retry/index.js";
@@ -65,8 +71,11 @@ function createParseFailureError(): ZodIssue {
 export function guard<T extends ZodTypeAny>(
   llmOutput: string,
   schema: T,
+  options?: GuardOptions,
 ): GuardResult<ZodInfer<T>> {
   const timer = createTimer();
+  const heuristics = resolveHeuristics(options);
+  let retryContextBlocks: RetryPromptContextBlock[] = [];
 
   // --- Safety: handle non-string input at runtime boundary ---
   if (typeof llmOutput !== "string") {
@@ -77,14 +86,26 @@ export function guard<T extends ZodTypeAny>(
     };
     return {
       success: false,
-      retryPrompt: generateRetryPrompt([]),
+      retryPrompt: generateRetryPrompt([], undefined, {
+        options: options?.retryPrompt,
+        strategy: options?.retryPromptStrategy,
+        onContextBlocks: (blocks) => {
+          retryContextBlocks = blocks;
+        },
+      }),
       errors: [parseError],
       telemetry,
+      debug: options?.debug
+        ? {
+            retryContextBlocks:
+              retryContextBlocks.length > 0 ? retryContextBlocks : undefined,
+          }
+        : undefined,
     };
   }
 
   // --- Stage 1: Dirty Parse ---
-  const parseResult = dirtyParse(llmOutput);
+  const parseResult = dirtyParse(llmOutput, { heuristics });
 
   if (!parseResult.success) {
     const parseError = createParseFailureError();
@@ -94,9 +115,26 @@ export function guard<T extends ZodTypeAny>(
     };
     return {
       success: false,
-      retryPrompt: generateRetryPrompt([], parseResult.raw),
+      retryPrompt: generateRetryPrompt([], parseResult.raw, {
+        options: options?.retryPrompt,
+        strategy: options?.retryPromptStrategy,
+        parseErrorLine: parseResult.likelyErrorLine,
+        onContextBlocks: (blocks) => {
+          retryContextBlocks = blocks;
+        },
+      }),
       errors: [parseError],
       telemetry,
+      debug: options?.debug
+        ? {
+            extractedText: parseResult.extractedText,
+            repairedText: parseResult.repairedText,
+            appliedRepairs: parseResult.appliedRepairs,
+            likelyErrorLine: parseResult.likelyErrorLine,
+            retryContextBlocks:
+              retryContextBlocks.length > 0 ? retryContextBlocks : undefined,
+          }
+        : undefined,
     };
   }
 
@@ -114,6 +152,13 @@ export function guard<T extends ZodTypeAny>(
       data: validationResult.data,
       telemetry,
       isRepaired: parseResult.isRepaired,
+      debug: options?.debug
+        ? {
+            extractedText: parseResult.extractedText,
+            repairedText: parseResult.repairedText,
+            appliedRepairs: parseResult.appliedRepairs,
+          }
+        : undefined,
     };
   }
 
@@ -122,10 +167,78 @@ export function guard<T extends ZodTypeAny>(
     durationMs: timer.stop(),
     status: "failed",
   };
+  const sourceTextForContext =
+    parseResult.repairedText ??
+    safeStringify(parseResult.value) ??
+    undefined;
+
   return {
     success: false,
-    retryPrompt: generateRetryPrompt(validationResult.errors),
+    retryPrompt: generateRetryPrompt(validationResult.errors, undefined, {
+      options: options?.retryPrompt,
+      sourceText: sourceTextForContext,
+      strategy: options?.retryPromptStrategy,
+      onContextBlocks: (blocks) => {
+        retryContextBlocks = blocks;
+      },
+    }),
     errors: validationResult.errors,
     telemetry,
+    debug: options?.debug
+      ? {
+          extractedText: parseResult.extractedText,
+          repairedText: parseResult.repairedText,
+          appliedRepairs: parseResult.appliedRepairs,
+          retryContextBlocks:
+            retryContextBlocks.length > 0 ? retryContextBlocks : undefined,
+        }
+      : undefined,
   };
+}
+
+function resolveHeuristics(options?: GuardOptions): GuardHeuristicOptions {
+  const profile = options?.profile ?? "standard";
+
+  const profileDefaults: Record<
+    "safe" | "standard" | "aggressive",
+    GuardHeuristicOptions
+  > = {
+    safe: {
+      escapedQuotes: false,
+      singleQuotes: true,
+      stripComments: false,
+      normalizePythonLiterals: false,
+      unquotedKeys: true,
+      trailingCommas: true,
+    },
+    standard: {
+      escapedQuotes: true,
+      singleQuotes: true,
+      stripComments: true,
+      normalizePythonLiterals: true,
+      unquotedKeys: true,
+      trailingCommas: true,
+    },
+    aggressive: {
+      escapedQuotes: true,
+      singleQuotes: true,
+      stripComments: true,
+      normalizePythonLiterals: true,
+      unquotedKeys: true,
+      trailingCommas: true,
+    },
+  };
+
+  return {
+    ...profileDefaults[profile],
+    ...(options?.heuristics ?? {}),
+  };
+}
+
+function safeStringify(value: unknown): string | null {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return null;
+  }
 }
