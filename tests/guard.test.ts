@@ -156,7 +156,10 @@ Let me know if you need anything else!`;
     if (!r.success) {
       expect(r.telemetry.status).toBe("failed");
       expect(r.retryPrompt).toBeTruthy();
-      expect(r.errors).toEqual([]);
+      expect(r.errors.length).toBe(1);
+      expect(r.errors[0]!.code).toBe("custom");
+      expect(r.errors[0]!.message).toBe("Input could not be parsed as JSON");
+      expect(r.errors[0]!.path).toEqual([]);
     }
   });
 
@@ -167,6 +170,21 @@ Let me know if you need anything else!`;
     expect(r.success).toBe(false);
     if (!r.success) {
       expect(r.telemetry.status).toBe("failed");
+      expect(r.errors.length).toBe(1);
+      expect(r.errors[0]!.code).toBe("custom");
+    }
+  });
+
+  it("returns parse failure errors for non-string runtime input", () => {
+    const schema = z.object({ a: z.string() });
+    const r = guard(undefined as unknown as string, schema);
+
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.telemetry.status).toBe("failed");
+      expect(r.errors.length).toBe(1);
+      expect(r.errors[0]!.code).toBe("custom");
+      expect(r.errors[0]!.message).toBe("Input could not be parsed as JSON");
     }
   });
 

@@ -216,4 +216,59 @@ describe("applyHeuristics", () => {
     expect(r.applied).toBe(true);
     expect(JSON.parse(r.result)).toEqual({ name: "Bob", active: true });
   });
+
+  // -----------------------------------------------------------------------
+  // Python-style literals
+  // -----------------------------------------------------------------------
+
+  it("normalizes Python literals outside strings", () => {
+    const r = applyHeuristics('{"active": True, "deleted": False, "data": None}');
+    expect(r.applied).toBe(true);
+    expect(JSON.parse(r.result)).toEqual({ active: true, deleted: false, data: null });
+  });
+
+  it("does not normalize Python literal text inside strings", () => {
+    const input = '{"text": "True False None"}';
+    const r = applyHeuristics(input);
+    expect(JSON.parse(r.result)).toEqual({ text: "True False None" });
+  });
+
+  it("does not normalize Python literals inside larger identifiers", () => {
+    const r = applyHeuristics('{"value": someTrueValue}');
+    // still invalid JSON, but literal replacement must not alter identifier fragments
+    expect(r.result).toContain("someTrueValue");
+  });
+
+  // -----------------------------------------------------------------------
+  // JS comments
+  // -----------------------------------------------------------------------
+
+  it("strips line comments outside strings", () => {
+    const r = applyHeuristics('{"name": "Alice", // comment\n"age": 30}');
+    expect(r.applied).toBe(true);
+    expect(JSON.parse(r.result)).toEqual({ name: "Alice", age: 30 });
+  });
+
+  it("strips block comments outside strings", () => {
+    const r = applyHeuristics('{"name": "Alice", /* comment */ "age": 30}');
+    expect(r.applied).toBe(true);
+    expect(JSON.parse(r.result)).toEqual({ name: "Alice", age: 30 });
+  });
+
+  it("does not strip comment-like text inside strings", () => {
+    const input = '{"text": "url // not a comment /* still text */"}';
+    const r = applyHeuristics(input);
+    expect(r.result).toBe(input);
+    expect(r.applied).toBe(false);
+  });
+
+  // -----------------------------------------------------------------------
+  // Escaped wrapper quotes
+  // -----------------------------------------------------------------------
+
+  it("handles double-escaped wrapper quotes", () => {
+    const r = applyHeuristics('{\\\\\\"key\\\\\\": \\\\\"value\\\\\\"}');
+    expect(r.applied).toBe(true);
+    expect(JSON.parse(r.result)).toEqual({ key: "value" });
+  });
 });

@@ -13,6 +13,8 @@ import type { HeuristicResult } from "../types.js";
  * | Trailing commas | `{"a":1,}` | `{"a":1}` |
  * | Unquoted keys | `{name: "John"}` | `{"name": "John"}` |
  * | Single-quoted strings | `{'key': 'val'}` | `{"key": "val"}` |
+ * | JS comments | `{"a":1 // note}` | `{"a":1}` |
+ * | Python literals | `{"active": True}` | `{"active": true}` |
  * | Escaped-quote wrappers | `{\"key\": \"val\"}` | `{"key": "val"}` |
  *
  * @param input - A JSON-like string (after markdown extraction).
@@ -46,14 +48,28 @@ export function applyHeuristics(input: string): HeuristicResult {
     anyApplied = true;
   }
 
-  // --- Pass 3: Fix unquoted keys ---
+  // --- Pass 3: Strip JS-style comments ---
+  const commentResult = stripJsComments(current);
+  if (commentResult !== current) {
+    current = commentResult;
+    anyApplied = true;
+  }
+
+  // --- Pass 4: Normalize Python literals ---
+  const pyResult = normalizePythonLiterals(current);
+  if (pyResult !== current) {
+    current = pyResult;
+    anyApplied = true;
+  }
+
+  // --- Pass 5: Fix unquoted keys ---
   const uqResult = fixUnquotedKeys(current);
   if (uqResult !== current) {
     current = uqResult;
     anyApplied = true;
   }
 
-  // --- Pass 4: Strip trailing commas ---
+  // --- Pass 6: Strip trailing commas ---
   const tcResult = fixTrailingCommas(current);
   if (tcResult !== current) {
     current = tcResult;
@@ -79,15 +95,162 @@ function fixEscapedQuotes(input: string): string {
   // Quick exit: if there are no escaped quotes, nothing to do.
   if (!input.includes('\\"')) return input;
 
-  // Check if there are *any* normal (unescaped) double-quotes already.
-  // If the only double-quotes are escaped ones, unescape them all.
-  // We do a simple heuristic: if removing `\"` leaves no `"`, all quotes are escaped.
-  const withoutEscaped = input.replace(/\\"/g, "");
+  // Wrapper-unescape only when there are no normal quotes in the payload.
+  const withoutEscaped = input
+    .replace(/\\\\"/g, "")
+    .replace(/\\"/g, "");
   if (!withoutEscaped.includes('"')) {
-    return input.replace(/\\"/g, '"');
+    // Collapse one or more escaping layers for wrapper quotes.
+    let out = input;
+    for (let i = 0; i < 3; i++) {
+      const prev = out;
+      out = out.replace(/\\\\"/g, '\\"').replace(/\\"/g, '"');
+      if (out === prev) break;
+    }
+    return out;
   }
 
   return input;
+}
+
+// ---------------------------------------------------------------------------
+// Fix: JS-style comments
+// ---------------------------------------------------------------------------
+
+/**
+ * Strip JavaScript-style comments (`//` and `/* ... *\/`) outside strings.
+ */
+function stripJsComments(input: string): string {
+  const chars: string[] = [];
+  let inString = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+
+    if (inString) {
+      chars.push(ch);
+      if (ch === "\\" && i + 1 < input.length) {
+        i++;
+        chars.push(input[i]!);
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      chars.push(ch);
+      continue;
+    }
+
+    if (ch === "/" && i + 1 < input.length) {
+      const next = input[i + 1]!;
+
+      if (next === "/") {
+        i += 2;
+        while (i < input.length && input[i] !== "\n") i++;
+        if (i < input.length && input[i] === "\n") chars.push("\n");
+        continue;
+      }
+
+      if (next === "*") {
+        i += 2;
+        while (i + 1 < input.length) {
+          if (input[i] === "*" && input[i + 1] === "/") {
+            i++;
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+    }
+
+    chars.push(ch);
+  }
+
+  return chars.join("");
+}
+
+// ---------------------------------------------------------------------------
+// Fix: Python-style literals
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalize Python literals (`True`, `False`, `None`) outside strings.
+ */
+function normalizePythonLiterals(input: string): string {
+  const map: Record<string, string> = {
+    True: "true",
+    False: "false",
+    None: "null",
+  };
+
+  const chars: string[] = [];
+  let inString = false;
+  let i = 0;
+
+  while (i < input.length) {
+    const ch = input[i]!;
+
+    if (inString) {
+      chars.push(ch);
+      if (ch === "\\" && i + 1 < input.length) {
+        i++;
+        chars.push(input[i]!);
+      } else if (ch === '"') {
+        inString = false;
+      }
+      i++;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      chars.push(ch);
+      i++;
+      continue;
+    }
+
+    if (isAlpha(ch)) {
+      let j = i;
+      let word = "";
+      while (j < input.length && isWordChar(input[j]!)) {
+        word += input[j]!;
+        j++;
+      }
+
+      const replacement = map[word];
+      if (replacement && isWordBoundary(input, i - 1) && isWordBoundary(input, j)) {
+        chars.push(replacement);
+      } else {
+        chars.push(word);
+      }
+
+      i = j;
+      continue;
+    }
+
+    chars.push(ch);
+    i++;
+  }
+
+  return chars.join("");
+}
+
+function isAlpha(ch: string): boolean {
+  return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z");
+}
+
+function isWordChar(ch: string): boolean {
+  return isAlpha(ch) || (ch >= "0" && ch <= "9") || ch === "_";
+}
+
+function isWordBoundary(input: string, idx: number): boolean {
+  if (idx < 0 || idx >= input.length) return true;
+  const ch = input[idx]!;
+  return !isWordChar(ch);
 }
 
 // ---------------------------------------------------------------------------

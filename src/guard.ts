@@ -1,9 +1,17 @@
-import type { ZodTypeAny, infer as ZodInfer } from "zod";
+import type { ZodIssue, ZodTypeAny, infer as ZodInfer } from "zod";
 import type { GuardResult, TelemetryData } from "./types.js";
 import { dirtyParse } from "./dirty-parser/index.js";
 import { validateWithSchema } from "./validation/index.js";
 import { generateRetryPrompt } from "./retry/index.js";
 import { createTimer } from "./telemetry.js";
+
+function createParseFailureError(): ZodIssue {
+  return {
+    code: "custom",
+    path: [],
+    message: "Input could not be parsed as JSON",
+  } as ZodIssue;
+}
 
 /**
  * Validate and repair raw LLM output against a Zod schema.
@@ -62,6 +70,7 @@ export function guard<T extends ZodTypeAny>(
 
   // --- Safety: handle non-string input at runtime boundary ---
   if (typeof llmOutput !== "string") {
+    const parseError = createParseFailureError();
     const telemetry: TelemetryData = {
       durationMs: timer.stop(),
       status: "failed",
@@ -69,7 +78,7 @@ export function guard<T extends ZodTypeAny>(
     return {
       success: false,
       retryPrompt: generateRetryPrompt([]),
-      errors: [],
+      errors: [parseError],
       telemetry,
     };
   }
@@ -78,6 +87,7 @@ export function guard<T extends ZodTypeAny>(
   const parseResult = dirtyParse(llmOutput);
 
   if (!parseResult.success) {
+    const parseError = createParseFailureError();
     const telemetry: TelemetryData = {
       durationMs: timer.stop(),
       status: "failed",
@@ -85,7 +95,7 @@ export function guard<T extends ZodTypeAny>(
     return {
       success: false,
       retryPrompt: generateRetryPrompt([], parseResult.raw),
-      errors: [],
+      errors: [parseError],
       telemetry,
     };
   }
