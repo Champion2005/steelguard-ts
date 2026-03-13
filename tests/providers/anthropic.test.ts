@@ -47,7 +47,8 @@ describe("anthropic()", () => {
 
     await provider.call(messages);
 
-    const callArgs = client.messages.create.mock.calls[0][0] as Record<string, unknown>;
+    const callArgs = client.messages.create.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs).toBeDefined();
     expect(callArgs.system).toBeUndefined();
     expect(callArgs.messages).toEqual([{ role: "user", content: "Hello" }]);
   });

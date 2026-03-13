@@ -21,6 +21,12 @@ function truncateAssistantRetryContent(raw: string): string {
   return `${raw.slice(0, RETRY_ASSISTANT_MAX_CHARS)}\n...[truncated ${truncatedChars} chars]`;
 }
 
+function normalizeMaxRetries(value: number | undefined): number {
+  if (value === undefined) return 3;
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
 /**
  * End-to-end structured LLM output: call a provider, validate with
  * `guard()`, and automatically retry on failure.
@@ -38,7 +44,7 @@ export async function forge<T extends ZodTypeAny>(
   schema: T,
   options?: ForgeOptions,
 ): Promise<ForgeResult<ZodInfer<T>>> {
-  const maxRetries = Math.max(0, options?.maxRetries ?? 3);
+  const maxRetries = normalizeMaxRetries(options?.maxRetries);
   const totalAttempts = 1 + maxRetries;
   const timer = createTimer();
 
@@ -47,7 +53,10 @@ export async function forge<T extends ZodTypeAny>(
 
   let lastErrors: import("zod").ZodIssue[] = [];
   let lastRetryPrompt = "Your previous response could not be parsed as JSON. The schema is still in your context — return ONLY valid JSON.";
-  let lastTelemetry: import("../types.js").TelemetryData | undefined;
+  let lastTelemetry: import("../types.js").TelemetryData = {
+    durationMs: 0,
+    status: "failed",
+  };
   const attemptDetails: ForgeAttemptDetail[] = [];
 
   for (let attempt = 1; attempt <= totalAttempts; attempt++) {
@@ -100,7 +109,7 @@ export async function forge<T extends ZodTypeAny>(
 
   // All attempts exhausted
   const forgeTelemetry: ForgeTelemetry = {
-    durationMs: lastTelemetry?.durationMs ?? 0,
+    durationMs: lastTelemetry.durationMs,
     status: "failed",
     attempts: totalAttempts,
     totalDurationMs: timer.stop(),

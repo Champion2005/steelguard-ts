@@ -130,11 +130,7 @@ function extractFromBrackets(input: string): string | null {
     }
 
     if (ch === "}" || ch === "]") {
-      const top = stack[stack.length - 1];
-      if (!top) {
-        // Ignore orphan closers; they should not drive truncation bounds.
-        continue;
-      }
+      const top = stack[stack.length - 1]!;
 
       const expectedCloser = top === "{" ? "}" : "]";
       if (ch !== expectedCloser) {

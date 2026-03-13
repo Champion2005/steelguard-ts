@@ -121,6 +121,12 @@ describe("applyHeuristics", () => {
     expect(r.result).toBe('{"key": "value"}');
   });
 
+  it("handles escaped backtick and quotes inside backtick strings", () => {
+    const r = applyHeuristics('{`msg`: `line with \\`tick\\` and "dq"`}');
+    expect(r.applied).toBe(true);
+    expect(JSON.parse(r.result)).toEqual({ msg: 'line with `tick` and "dq"' });
+  });
+
   it("handles mixed single and double quotes", () => {
     const r = applyHeuristics("{\"name\": 'Alice'}");
     expect(r.applied).toBe(true);

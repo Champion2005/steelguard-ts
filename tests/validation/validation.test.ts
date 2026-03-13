@@ -258,6 +258,47 @@ describe("validateWithSchema", () => {
     }
   });
 
+  it("coerces discriminated union boolean discriminator", () => {
+    const schema = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal(true), count: z.number() }),
+      z.object({ kind: z.literal(false), active: z.boolean() }),
+    ]);
+
+    const r = validateWithSchema({ kind: "true", count: "7" }, schema);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data).toEqual({ kind: true, count: 7 });
+    }
+  });
+
+  it("coerces discriminated union string discriminator case-insensitively", () => {
+    const schema = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("ALPHA"), count: z.number() }),
+      z.object({ kind: z.literal("BETA"), active: z.boolean() }),
+    ]);
+
+    const r = validateWithSchema({ kind: "beta", active: "true" }, schema);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data).toEqual({ kind: "BETA", active: true });
+    }
+  });
+
+  it("coerces nested union objects via fallback branch", () => {
+    const schema = z.object({
+      payload: z.union([
+        z.object({ count: z.number() }),
+        z.object({ active: z.boolean() }),
+      ]),
+    });
+
+    const r = validateWithSchema({ payload: { count: "9" } }, schema);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.payload).toEqual({ count: 9 });
+    }
+  });
+
   it("coerces values inside optional wrapper", () => {
     const schema = z.object({ count: z.number().optional() });
     const r = validateWithSchema({ count: "5" }, schema);
@@ -442,4 +483,5 @@ describe("validateWithSchema", () => {
       expect(r.errors.length).toBeGreaterThanOrEqual(2);
     }
   });
+
 });

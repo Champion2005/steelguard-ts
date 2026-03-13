@@ -125,7 +125,8 @@ describe("openaiCompatible()", () => {
 
     await provider.call(messages, { temperature: 0.2 });
 
-    const params = client.chat.completions.create.mock.calls[0][0] as Record<string, unknown>;
+    const params = client.chat.completions.create.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(params).toBeDefined();
     expect(params.temperature).toBe(0.2);
     expect(params.max_tokens).toBeUndefined();
   });
@@ -136,7 +137,8 @@ describe("openaiCompatible()", () => {
 
     await provider.call(messages, { maxTokens: 123 });
 
-    const params = client.chat.completions.create.mock.calls[0][0] as Record<string, unknown>;
+    const params = client.chat.completions.create.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(params).toBeDefined();
     expect(params.max_tokens).toBe(123);
     expect(params.temperature).toBeUndefined();
   });

@@ -155,6 +155,19 @@ describe("forge()", () => {
     }
   });
 
+  it("fails with parse-style retry prompt when provider returns empty string", async () => {
+    const provider = mockProvider([""]);
+    const messages: Message[] = [{ role: "user", content: "Return a user." }];
+
+    const result = await forge(provider, messages, UserSchema, { maxRetries: 0 });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.retryPrompt).toContain("valid JSON");
+      expect(result.errors.length).toBe(1);
+    }
+  });
+
   // -----------------------------------------------------------------------
   // Custom maxRetries
   // -----------------------------------------------------------------------
@@ -208,6 +221,23 @@ describe("forge()", () => {
     expect(provider.call).toHaveBeenCalledTimes(1);
     if (!result.success) {
       expect(result.telemetry.attempts).toBe(1);
+    }
+  });
+
+  it("handles NaN maxRetries defensively", async () => {
+    const provider = mockProvider(["not json"]);
+    const messages: Message[] = [{ role: "user", content: "Return a user." }];
+
+    const result = await forge(provider, messages, UserSchema, {
+      maxRetries: Number.NaN,
+    });
+
+    expect(result.success).toBe(false);
+    expect(provider.call).toHaveBeenCalledTimes(1);
+    if (!result.success) {
+      expect(result.telemetry.attempts).toBe(1);
+      expect(result.telemetry.attemptDetails).toHaveLength(1);
+      expect(result.retryPrompt).toContain("return ONLY valid JSON");
     }
   });
 
