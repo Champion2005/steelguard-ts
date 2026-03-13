@@ -6,6 +6,8 @@ import type {
   ForgeResult,
   ForgeTelemetry,
   ForgeAttemptDetail,
+  ForgeFailurePayload,
+  ProviderCallOptions,
 } from "./types.js";
 import { guard } from "../guard.js";
 import { createTimer } from "../telemetry.js";
@@ -27,6 +29,21 @@ function normalizeMaxRetries(value: number | undefined): number {
   return Math.max(0, Math.floor(value));
 }
 
+function resolveMaxRetries(options?: ForgeOptions): number {
+  return normalizeMaxRetries(options?.retryPolicy?.maxRetries ?? options?.maxRetries);
+}
+
+function resolveProviderOptions(
+  attempt: number,
+  options?: ForgeOptions,
+): ProviderCallOptions | undefined {
+  const base = options?.providerOptions;
+  const mutate = options?.retryPolicy?.mutateProviderOptions;
+  if (!mutate) return base;
+
+  return mutate(attempt, base);
+}
+
 /**
  * End-to-end structured LLM output: call a provider, validate with
  * `guard()`, and automatically retry on failure.
@@ -44,7 +61,7 @@ export async function forge<T extends ZodTypeAny>(
   schema: T,
   options?: ForgeOptions,
 ): Promise<ForgeResult<ZodInfer<T>>> {
-  const maxRetries = normalizeMaxRetries(options?.maxRetries);
+  const maxRetries = resolveMaxRetries(options);
   const totalAttempts = 1 + maxRetries;
   const timer = createTimer();
 
@@ -60,10 +77,20 @@ export async function forge<T extends ZodTypeAny>(
   const attemptDetails: ForgeAttemptDetail[] = [];
 
   for (let attempt = 1; attempt <= totalAttempts; attempt++) {
-    // Let provider errors bubble — they are the user's responsibility
-    const raw = await provider.call(conversation, options?.providerOptions);
+    options?.onEvent?.({ kind: "attempt_start", attempt, totalAttempts });
 
-    const result = guard(raw, schema);
+    // Let provider errors bubble — they are the user's responsibility
+    const providerOptions = resolveProviderOptions(attempt, options);
+    const raw = await provider.call(conversation, providerOptions);
+    const wouldTruncate = raw.length > RETRY_ASSISTANT_MAX_CHARS;
+    options?.onEvent?.({
+      kind: "provider_response",
+      attempt,
+      rawLength: raw.length,
+      truncatedForRetry: wouldTruncate,
+    });
+
+    const result = guard(raw, schema, options?.guardOptions);
     lastTelemetry = result.telemetry;
     attemptDetails.push({
       attempt,
@@ -72,6 +99,16 @@ export async function forge<T extends ZodTypeAny>(
     });
 
     if (result.success) {
+      options?.onEvent?.({
+        kind: "guard_success",
+        attempt,
+        status:
+          result.telemetry.status === "clean"
+            ? "clean"
+            : "repaired_natively",
+        durationMs: result.telemetry.durationMs,
+      });
+
       const forgeTelemetry: ForgeTelemetry = {
         durationMs: result.telemetry.durationMs,
         status: result.telemetry.status,
@@ -79,6 +116,13 @@ export async function forge<T extends ZodTypeAny>(
         totalDurationMs: timer.stop(),
         attemptDetails,
       };
+
+      options?.onEvent?.({
+        kind: "finished",
+        success: true,
+        attempts: attempt,
+        totalDurationMs: forgeTelemetry.totalDurationMs,
+      });
 
       return {
         success: true,
@@ -91,11 +135,34 @@ export async function forge<T extends ZodTypeAny>(
     lastErrors = result.errors;
     lastRetryPrompt = result.retryPrompt;
 
+    options?.onEvent?.({
+      kind: "guard_failure",
+      attempt,
+      durationMs: result.telemetry.durationMs,
+      errorCount: result.errors.length,
+    });
+
+    const failurePayload: ForgeFailurePayload = {
+      errors: result.errors,
+      retryPrompt: result.retryPrompt,
+    };
+
+    const shouldRetry = options?.retryPolicy?.shouldRetry
+      ? options.retryPolicy.shouldRetry(failurePayload, attempt)
+      : true;
+
     // Don't append retry messages after the final attempt
-    if (attempt < totalAttempts) {
+    if (attempt < totalAttempts && shouldRetry) {
       options?.onRetry?.(attempt, {
         errors: result.errors,
         retryPrompt: result.retryPrompt,
+      });
+
+      options?.onEvent?.({
+        kind: "retry_scheduled",
+        attempt,
+        nextAttempt: attempt + 1,
+        reason: "guard_failure",
       });
 
       const assistantRetryContent = truncateAssistantRetryContent(raw);
@@ -104,6 +171,8 @@ export async function forge<T extends ZodTypeAny>(
         { role: "assistant", content: assistantRetryContent },
         { role: "user", content: result.retryPrompt },
       );
+    } else if (!shouldRetry) {
+      break;
     }
   }
 
@@ -111,10 +180,17 @@ export async function forge<T extends ZodTypeAny>(
   const forgeTelemetry: ForgeTelemetry = {
     durationMs: lastTelemetry.durationMs,
     status: "failed",
-    attempts: totalAttempts,
+    attempts: attemptDetails.length,
     totalDurationMs: timer.stop(),
     attemptDetails,
   };
+
+  options?.onEvent?.({
+    kind: "finished",
+    success: false,
+    attempts: attemptDetails.length,
+    totalDurationMs: forgeTelemetry.totalDurationMs,
+  });
 
   return {
     success: false,

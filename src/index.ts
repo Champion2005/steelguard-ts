@@ -46,6 +46,7 @@
 
 export { guard } from "./guard.js";
 export { forge } from "./providers/forge.js";
+export { forgeWithFallback } from "./providers/fallback.js";
 export type {
   GuardResult,
   GuardSuccess,
@@ -66,6 +67,11 @@ export type {
   ProviderCallOptions,
   ReforgeProvider,
   ForgeOptions,
+  ForgeRetryPolicy,
+  ForgeEvent,
+  ForgeFailurePayload,
+  ForgeFallbackProvider,
+  ForgeFallbackOptions,
   ForgeTelemetry,
   ForgeAttemptDetail,
   ForgeResult,

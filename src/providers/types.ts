@@ -1,5 +1,5 @@
 import type { ZodIssue } from "zod";
-import type { TelemetryData } from "../types.js";
+import type { TelemetryData, GuardOptions } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Provider Layer Types — these form the contract for the forge() function
@@ -36,16 +36,82 @@ export interface ReforgeProvider {
   call(messages: Message[], options?: ProviderCallOptions): Promise<string>;
 }
 
+export interface ForgeFailurePayload {
+  errors: ZodIssue[];
+  retryPrompt: string;
+}
+
+export interface ForgeRetryPolicy {
+  maxRetries?: number;
+  shouldRetry?: (failure: ForgeFailurePayload, attempt: number) => boolean;
+  mutateProviderOptions?: (
+    attempt: number,
+    baseOptions: ProviderCallOptions | undefined,
+  ) => ProviderCallOptions;
+}
+
+export type ForgeEvent =
+  | { kind: "attempt_start"; attempt: number; totalAttempts: number }
+  | {
+      kind: "provider_response";
+      attempt: number;
+      rawLength: number;
+      truncatedForRetry: boolean;
+    }
+  | {
+      kind: "guard_success";
+      attempt: number;
+      status: "clean" | "repaired_natively";
+      durationMs: number;
+    }
+  | {
+      kind: "guard_failure";
+      attempt: number;
+      durationMs: number;
+      errorCount: number;
+    }
+  | {
+      kind: "retry_scheduled";
+      attempt: number;
+      nextAttempt: number;
+      reason: "guard_failure";
+    }
+  | {
+      kind: "finished";
+      success: boolean;
+      attempts: number;
+      totalDurationMs: number;
+    };
+
 /**
  * Options for the `forge()` orchestrator.
  */
 export interface ForgeOptions {
   /** Maximum number of retry attempts after the initial call. Default: 3. */
   maxRetries?: number;
+  /** Optional retry policy hooks for advanced retry control. */
+  retryPolicy?: ForgeRetryPolicy;
   /** Options passed through to the provider on every call. */
   providerOptions?: ProviderCallOptions;
+  /** Forwarded to `guard()` on every attempt. */
+  guardOptions?: GuardOptions;
   /** Callback invoked after a failed attempt that will be retried. */
   onRetry?: (attempt: number, failure: { errors: ZodIssue[]; retryPrompt: string }) => void;
+  /** Structured event stream for observability. */
+  onEvent?: (event: ForgeEvent) => void;
+}
+
+export interface ForgeFallbackProvider {
+  provider: ReforgeProvider;
+  maxAttempts?: number;
+  providerOptions?: ProviderCallOptions;
+}
+
+export interface ForgeFallbackOptions {
+  guardOptions?: GuardOptions;
+  onRetry?: ForgeOptions["onRetry"];
+  onEvent?: ForgeOptions["onEvent"];
+  onProviderFallback?: (fromProviderIndex: number, toProviderIndex: number) => void;
 }
 
 export interface ForgeAttemptDetail {

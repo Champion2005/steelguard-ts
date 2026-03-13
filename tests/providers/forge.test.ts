@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { forge } from "../../src/providers/forge.js";
+import { forgeWithFallback } from "../../src/providers/fallback.js";
 import type { ReforgeProvider, Message } from "../../src/providers/types.js";
 
 /**
@@ -372,5 +373,120 @@ describe("forge()", () => {
       expect.any(Array),
       providerOptions,
     );
+  });
+
+  it("supports retryPolicy.shouldRetry to stop early", async () => {
+    const provider = mockProvider([
+      "not json",
+      '{"name": "should not happen", "age": 1}',
+    ]);
+
+    const result = await forge(provider, [{ role: "user", content: "Return a user." }], UserSchema, {
+      maxRetries: 3,
+      retryPolicy: {
+        shouldRetry: () => false,
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(provider.call).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports retryPolicy.mutateProviderOptions per attempt", async () => {
+    const provider = mockProvider([
+      "not json",
+      '{"name": "Nora", "age": 33}',
+    ]);
+
+    const result = await forge(provider, [{ role: "user", content: "Return a user." }], UserSchema, {
+      providerOptions: { temperature: 0.9 },
+      retryPolicy: {
+        mutateProviderOptions: (attempt, base) => ({
+          ...base,
+          temperature: attempt === 1 ? 0.9 : 0.2,
+        }),
+      },
+    });
+
+    expect(result.success).toBe(true);
+    const calls = (provider.call as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0]?.[1]).toEqual({ temperature: 0.9 });
+    expect(calls[1]?.[1]).toEqual({ temperature: 0.2 });
+  });
+
+  it("emits structured events through onEvent", async () => {
+    const provider = mockProvider([
+      "not json",
+      '{"name": "Quinn", "age": 31}',
+    ]);
+
+    const onEvent = vi.fn();
+    const result = await forge(provider, [{ role: "user", content: "Return a user." }], UserSchema, {
+      onEvent,
+    });
+
+    expect(result.success).toBe(true);
+    const kinds = onEvent.mock.calls.map((c) => c[0]?.kind);
+    expect(kinds).toContain("attempt_start");
+    expect(kinds).toContain("provider_response");
+    expect(kinds).toContain("guard_failure");
+    expect(kinds).toContain("retry_scheduled");
+    expect(kinds).toContain("guard_success");
+    expect(kinds[kinds.length - 1]).toBe("finished");
+  });
+
+  it("forwards guardOptions to guard() for line-aware retry prompts", async () => {
+    const provider = mockProvider([
+      '{"name": "Ava"}',
+    ]);
+
+    const result = await forge(provider, [{ role: "user", content: "Return a user." }], UserSchema, {
+      maxRetries: 0,
+      guardOptions: {
+        retryPrompt: { mode: "line-aware" },
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.retryPrompt).toContain("Relevant lines:");
+    }
+  });
+
+  it("forgeWithFallback succeeds with secondary provider", async () => {
+    const primary = mockProvider(["not json"]);
+    const secondary = mockProvider(['{"name":"Iris","age":44}']);
+
+    const result = await forgeWithFallback(
+      [
+        { provider: primary, maxAttempts: 1 },
+        { provider: secondary, maxAttempts: 1 },
+      ],
+      [{ role: "user", content: "Return a user." }],
+      UserSchema,
+    );
+
+    expect(result.success).toBe(true);
+    expect(primary.call).toHaveBeenCalledTimes(1);
+    expect(secondary.call).toHaveBeenCalledTimes(1);
+  });
+
+  it("forgeWithFallback emits provider fallback callback", async () => {
+    const primary = mockProvider(["not json"]);
+    const secondary = mockProvider(["still bad"]);
+    const onProviderFallback = vi.fn();
+
+    const result = await forgeWithFallback(
+      [
+        { provider: primary, maxAttempts: 1 },
+        { provider: secondary, maxAttempts: 1 },
+      ],
+      [{ role: "user", content: "Return a user." }],
+      UserSchema,
+      { onProviderFallback },
+    );
+
+    expect(result.success).toBe(false);
+    expect(onProviderFallback).toHaveBeenCalledWith(0, 1);
   });
 });
