@@ -166,6 +166,13 @@ describe("extractJsonString", () => {
     expect(r.extracted).toBe('{"items": [{"id": 1');
   });
 
+  it("ignores mismatched/orphan closers when computing truncated extraction bounds", () => {
+    const input = 'Prefix {"items": [1, 2]}] trailing text';
+    const r = extractJsonString(input);
+    expect(r.wasExtracted).toBe(true);
+    expect(r.extracted).toBe('{"items": [1, 2]}');
+  });
+
   it("extracts nested JSON correctly with conversational wrapper", () => {
     const input =
       'Here: {"user": {"name": "Bob", "age": 30}} and more text.';

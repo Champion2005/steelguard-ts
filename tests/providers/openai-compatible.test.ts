@@ -116,8 +116,28 @@ describe("openaiCompatible()", () => {
     expect(client.chat.completions.create).toHaveBeenCalledWith({
       model: "gpt-4o-mini",
       messages: expect.any(Array),
-      temperature: undefined,
-      max_tokens: undefined,
     });
+  });
+
+  it("omits max_tokens when only temperature is provided", async () => {
+    const client = mockOpenAIClient('{"ok": true}');
+    const provider = openaiCompatible(client, "gpt-4o");
+
+    await provider.call(messages, { temperature: 0.2 });
+
+    const params = client.chat.completions.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.temperature).toBe(0.2);
+    expect(params.max_tokens).toBeUndefined();
+  });
+
+  it("omits temperature when only maxTokens is provided", async () => {
+    const client = mockOpenAIClient('{"ok": true}');
+    const provider = openaiCompatible(client, "gpt-4o");
+
+    await provider.call(messages, { maxTokens: 123 });
+
+    const params = client.chat.completions.create.mock.calls[0][0] as Record<string, unknown>;
+    expect(params.max_tokens).toBe(123);
+    expect(params.temperature).toBeUndefined();
   });
 });

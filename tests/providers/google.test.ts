@@ -67,6 +67,28 @@ describe("google()", () => {
     );
   });
 
+  it("concatenates multiple system messages with double newlines", async () => {
+    const client = mockGoogleClient('{"ok": true}');
+    const provider = google(client, "gemini-2.0-flash");
+
+    const messages: Message[] = [
+      { role: "system", content: "Policy A" },
+      { role: "system", content: "Policy B" },
+      { role: "user", content: "Hello" },
+    ];
+
+    await provider.call(messages);
+
+    expect(client._startChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemInstruction: {
+          role: "user",
+          parts: [{ text: "Policy A\n\nPolicy B" }],
+        },
+      }),
+    );
+  });
+
   it("returns the response text", async () => {
     const client = mockGoogleClient('{"name": "Alice"}');
     const provider = google(client, "gemini-2.0-flash");

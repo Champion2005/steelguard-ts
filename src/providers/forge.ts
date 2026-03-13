@@ -9,6 +9,17 @@ import type {
 import { guard } from "../guard.js";
 import { createTimer } from "../telemetry.js";
 
+const RETRY_ASSISTANT_MAX_CHARS = 2000;
+
+function truncateAssistantRetryContent(raw: string): string {
+  if (raw.length <= RETRY_ASSISTANT_MAX_CHARS) {
+    return raw;
+  }
+
+  const truncatedChars = raw.length - RETRY_ASSISTANT_MAX_CHARS;
+  return `${raw.slice(0, RETRY_ASSISTANT_MAX_CHARS)}\n...[truncated ${truncatedChars} chars]`;
+}
+
 /**
  * End-to-end structured LLM output: call a provider, validate with
  * `guard()`, and automatically retry on failure.
@@ -26,7 +37,7 @@ export async function forge<T extends ZodTypeAny>(
   schema: T,
   options?: ForgeOptions,
 ): Promise<ForgeResult<ZodInfer<T>>> {
-  const maxRetries = options?.maxRetries ?? 3;
+  const maxRetries = Math.max(0, options?.maxRetries ?? 3);
   const totalAttempts = 1 + maxRetries;
   const timer = createTimer();
 
@@ -63,8 +74,10 @@ export async function forge<T extends ZodTypeAny>(
 
     // Don't append retry messages after the final attempt
     if (attempt < totalAttempts) {
+      const assistantRetryContent = truncateAssistantRetryContent(raw);
+
       conversation.push(
-        { role: "assistant", content: raw },
+        { role: "assistant", content: assistantRetryContent },
         { role: "user", content: result.retryPrompt },
       );
     }

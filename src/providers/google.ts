@@ -62,7 +62,9 @@ export function google(
       });
 
       // Convert messages to Gemini format
-      const systemMsg = messages.find((m) => m.role === "system");
+      const systemMessages = messages
+        .filter((m) => m.role === "system")
+        .map((m) => m.content);
       const nonSystemMsgs = messages.filter((m) => m.role !== "system");
 
       const history = nonSystemMsgs.slice(0, -1).map((m) => ({
@@ -77,8 +79,11 @@ export function google(
 
       const chat = genModel.startChat({
         history,
-        systemInstruction: systemMsg
-          ? { role: "user", parts: [{ text: systemMsg.content }] }
+        systemInstruction: systemMessages.length > 0
+          ? {
+              role: "user",
+              parts: [{ text: systemMessages.join("\n\n") }],
+            }
           : undefined,
       });
 

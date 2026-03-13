@@ -146,4 +146,24 @@ describe("anthropic()", () => {
       }),
     );
   });
+
+  it("concatenates multiple system messages with double newlines", async () => {
+    const client = mockAnthropicClient('{"ok": true}');
+    const provider = anthropic(client, "claude-sonnet-4-20250514");
+
+    const messages: Message[] = [
+      { role: "system", content: "Rule 1" },
+      { role: "user", content: "Hello" },
+      { role: "system", content: "Rule 2" },
+    ];
+
+    await provider.call(messages);
+
+    expect(client.messages.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: "Rule 1\n\nRule 2",
+        messages: [{ role: "user", content: "Hello" }],
+      }),
+    );
+  });
 });

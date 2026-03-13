@@ -42,7 +42,9 @@ export function anthropic(
       const extra = filterReforgeKeys(options);
 
       // Anthropic requires system messages to be passed separately
-      const systemMsg = messages.find((m) => m.role === "system");
+      const systemMessages = messages
+        .filter((m) => m.role === "system")
+        .map((m) => m.content);
       const nonSystemMsgs = messages.filter((m) => m.role !== "system");
 
       const params: Record<string, unknown> = {
@@ -55,8 +57,8 @@ export function anthropic(
         ...extra,
       };
 
-      if (systemMsg) {
-        params.system = systemMsg.content;
+      if (systemMessages.length > 0) {
+        params.system = systemMessages.join("\n\n");
       }
 
       if (options?.temperature !== undefined) {

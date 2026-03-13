@@ -87,7 +87,7 @@ function coerceForSchema(data: unknown, schema: ZodTypeAny): unknown {
   }
 
   // For objects/arrays, clone & iteratively coerce leaves.
-  const root = Array.isArray(data) ? [...data] : { ...data };
+  const root = cloneContainer(data);
 
   // Work queue: [parentRef, key, subSchema]
   type WorkItem = {
@@ -103,14 +103,14 @@ function coerceForSchema(data: unknown, schema: ZodTypeAny): unknown {
   const MAX_ITERATIONS = 50_000;
   let iterations = 0;
 
-  while (queue.length > 0 && iterations < MAX_ITERATIONS) {
+  for (let queueIndex = 0; queueIndex < queue.length && iterations < MAX_ITERATIONS; queueIndex++) {
     iterations++;
-    const item = queue.shift()!;
+    const item = queue[queueIndex]!;
     const value = (item.parent as Record<string | number, unknown>)[item.key];
 
     if (typeof value === "object" && value !== null) {
       // Clone nested objects/arrays so we don't mutate the original.
-      const cloned = Array.isArray(value) ? [...value] : { ...value };
+      const cloned = cloneContainer(value);
       (item.parent as Record<string | number, unknown>)[item.key] = cloned;
       enqueueChildren(cloned, item.subSchema, queue);
     } else {
@@ -123,6 +123,32 @@ function coerceForSchema(data: unknown, schema: ZodTypeAny): unknown {
   }
 
   return root;
+}
+
+function cloneContainer(value: unknown): Record<string, unknown> | unknown[] {
+  if (Array.isArray(value)) {
+    return [...value];
+  }
+
+  if (isPlainObject(value)) {
+    const source = value as Record<string, unknown>;
+    const target = Object.create(null) as Record<string, unknown>;
+    for (const key of Object.keys(source)) {
+      target[key] = source[key];
+    }
+    return target;
+  }
+
+  return Object.create(null) as Record<string, unknown>;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /**

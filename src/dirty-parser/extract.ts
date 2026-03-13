@@ -100,12 +100,11 @@ function extractFromBrackets(input: string): string | null {
 
   // Walk forward to find the matching closer.
   const opener = input[startIdx]!;
-  const closer = opener === "{" ? "}" : "]";
-  let depth = 0;
   let inString = false;
-  let lastCloserIdx = -1;
+  const stack: string[] = [opener];
+  let lastMatchedCloserIdx = -1;
 
-  for (let i = startIdx; i < input.length; i++) {
+  for (let i = startIdx + 1; i < input.length; i++) {
     const ch = input[i]!;
 
     if (inString) {
@@ -125,14 +124,28 @@ function extractFromBrackets(input: string): string | null {
     }
 
     if (ch === "{" || ch === "[") {
-      depth++;
-    } else if (ch === "}" || ch === "]") {
-      depth--;
-      if (depth <= 0) {
-        lastCloserIdx = i;
+      stack.push(ch);
+      continue;
+    }
+
+    if (ch === "}" || ch === "]") {
+      const top = stack[stack.length - 1];
+      if (!top) {
+        // Ignore orphan closers; they should not drive truncation bounds.
+        continue;
       }
-      if (depth === 0 && ch === closer) {
-        // Found exact match — return the substring.
+
+      const expectedCloser = top === "{" ? "}" : "]";
+      if (ch !== expectedCloser) {
+        // Ignore mismatched closers; keep current nesting state intact.
+        continue;
+      }
+
+      stack.pop();
+      lastMatchedCloserIdx = i;
+
+      if (stack.length === 0) {
+        // Found exact match for the first opener — return the substring.
         const extracted = input.slice(startIdx, i + 1);
         if (extracted !== input) return extracted;
         return null; // Already the full input, no extraction needed.
@@ -142,7 +155,7 @@ function extractFromBrackets(input: string): string | null {
 
   // Truncated — return from opener to last closer or end of input.
   // Let the balance stage handle fixing it.
-  const end = lastCloserIdx > startIdx ? lastCloserIdx + 1 : input.length;
+  const end = lastMatchedCloserIdx > startIdx ? lastMatchedCloserIdx + 1 : input.length;
   const extracted = input.slice(startIdx, end);
   if (extracted !== input) return extracted;
   return null;

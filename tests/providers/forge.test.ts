@@ -192,6 +192,47 @@ describe("forge()", () => {
     }
   });
 
+  it("clamps negative maxRetries to zero", async () => {
+    const provider = mockProvider(["not json"]);
+    const messages: Message[] = [
+      { role: "user", content: "Return a user." },
+    ];
+
+    const result = await forge(provider, messages, UserSchema, {
+      maxRetries: -5,
+    });
+
+    expect(result.success).toBe(false);
+    expect(provider.call).toHaveBeenCalledTimes(1);
+    if (!result.success) {
+      expect(result.telemetry.attempts).toBe(1);
+    }
+  });
+
+  it("truncates large assistant retry content before appending to conversation", async () => {
+    const hugeInvalid = `not-json-${"x".repeat(4500)}`;
+    const provider = mockProvider([
+      hugeInvalid,
+      '{"name": "Eve", "age": 28}',
+    ]);
+    const messages: Message[] = [
+      { role: "user", content: "Return a user." },
+    ];
+
+    const result = await forge(provider, messages, UserSchema);
+
+    expect(result.success).toBe(true);
+    expect(provider.call).toHaveBeenCalledTimes(2);
+
+    const secondCallMessages = (provider.call as ReturnType<typeof vi.fn>).mock.calls[1][0] as Message[];
+    const assistantRetry = secondCallMessages.find((m) => m.role === "assistant");
+
+    expect(assistantRetry).toBeDefined();
+    expect(assistantRetry?.content.length).toBeLessThan(hugeInvalid.length);
+    expect(assistantRetry?.content).toContain("...[truncated ");
+    expect(assistantRetry?.content.length).toBeLessThanOrEqual(2040);
+  });
+
   // -----------------------------------------------------------------------
   // Provider errors bubble up
   // -----------------------------------------------------------------------

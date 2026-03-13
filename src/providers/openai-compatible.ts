@@ -59,13 +59,21 @@ export function openaiCompatible(
     ): Promise<string> {
       const extra = filterReforgeKeys(options);
 
-      const response = await client.chat.completions.create({
+      const params: Record<string, unknown> = {
         model,
         messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        temperature: options?.temperature,
-        max_tokens: options?.maxTokens,
         ...extra,
-      });
+      };
+
+      if (options?.temperature !== undefined) {
+        params.temperature = options.temperature;
+      }
+
+      if (options?.maxTokens !== undefined) {
+        params.max_tokens = options.maxTokens;
+      }
+
+      const response = await client.chat.completions.create(params);
 
       const content = response.choices[0]?.message?.content;
       if (!content) {

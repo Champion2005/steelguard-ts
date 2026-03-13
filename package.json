@@ -48,6 +48,19 @@
       }
     }
   },
+  "typesVersions": {
+    "*": {
+      "openai-compatible": [
+        "dist/providers/openai-compatible.d.ts"
+      ],
+      "anthropic": [
+        "dist/providers/anthropic.d.ts"
+      ],
+      "google": [
+        "dist/providers/google.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist",
     "README.md",
@@ -100,9 +113,6 @@
     "@google/generative-ai": "^0.21.0"
   },
   "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    },
     "openai": {
       "optional": true
     },
