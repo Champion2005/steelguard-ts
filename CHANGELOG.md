@@ -23,9 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **`forge()` now forwards guard options** - Added `guardOptions` pass-through for consistent retry prompt behavior in provider orchestration flows.
-- **Dirty parser metadata surfaced internally** - Dirty parse pipeline now tracks applied repairs and likely parse line to improve retry context quality.
-- **Internal demo app relocation** - The independent validation/demo app has been moved to `.internal/independent-test-demo` to keep internal-only validation assets out of the public root.
-- **Timing wording simplified** - Package and docs timing examples now use simplified non-precise language while retaining the under-5ms local validation target.
 
 ### Fixed
 

@@ -569,4 +569,4 @@ See [CHANGELOG.md](CHANGELOG.md) for a detailed history of changes.
 
 ## License
 
-MIT
+GNU GPL v3

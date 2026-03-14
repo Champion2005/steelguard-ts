@@ -108,4 +108,4 @@ Use the [feature request template](https://github.com/Champion2005/reforge/issue
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the GNU GPL v3.

@@ -14,8 +14,17 @@ import {
   SiOllama,
   SiPerplexity,
 } from 'react-icons/si'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CodeBlock from '../components/CodeBlock'
+
+type PackageInfo = {
+  name: string
+  version: string
+  license?: string
+  homepage?: string
+}
+
+const NPM_LATEST_ENDPOINT = 'https://registry.npmjs.org/reforge-ai/latest'
 
 /* ── Provider logo data ─────────────────────────────────── */
 
@@ -105,6 +114,36 @@ const installCmd = 'npm install reforge-ai zod'
 export default function Home() {
   const [copied, setCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<'guard' | 'forge'>('guard')
+  const [pkgInfo, setPkgInfo] = useState<PackageInfo>({
+    name: 'reforge-ai',
+    version: '0.3.0',
+    license: 'GPL-3.0-only',
+    homepage: 'https://www.npmjs.com/package/reforge-ai',
+  })
+
+  useEffect(() => {
+    let isMounted = true
+
+    void fetch(NPM_LATEST_ENDPOINT)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: Partial<PackageInfo> | null) => {
+        if (!isMounted || !data?.version || !data?.name) return
+
+        setPkgInfo({
+          name: data.name,
+          version: data.version,
+          license: data.license,
+          homepage: data.homepage || 'https://www.npmjs.com/package/reforge-ai',
+        })
+      })
+      .catch(() => {
+        // Keep fallback values on network failure.
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(installCmd)
@@ -179,6 +218,34 @@ export default function Home() {
                   <span className="text-xs font-medium">{p.name}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Live package info */}
+          <div className="mx-auto mt-8 max-w-3xl rounded-xl border border-border/50 bg-card/40 p-4 backdrop-blur-sm sm:p-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/40 bg-muted/30 p-3 text-left">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground/60">Package</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{pkgInfo.name}</p>
+              </div>
+              <div className="rounded-lg border border-border/40 bg-muted/30 p-3 text-left">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground/60">Latest npm</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">v{pkgInfo.version}</p>
+              </div>
+              <div className="rounded-lg border border-border/40 bg-muted/30 p-3 text-left">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground/60">License</p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{pkgInfo.license || 'GPL-3.0-only'}</p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <a
+                href={pkgInfo.homepage || 'https://www.npmjs.com/package/reforge-ai'}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-primary hover:underline"
+              >
+                View package
+              </a>
             </div>
           </div>
         </div>
