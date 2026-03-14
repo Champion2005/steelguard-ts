@@ -189,7 +189,7 @@ export function guard<T extends ZodTypeAny>(
           debug: options?.debug
             ? {
                 extractedText: parseResult.extractedText,
-                repairedText: parseResult.repairedText,
+                repairedText: safeStringify(secondPass.data) ?? parseResult.repairedText,
                 appliedRepairs: parseResult.appliedRepairs,
               }
             : undefined,

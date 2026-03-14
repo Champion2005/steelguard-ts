@@ -31,6 +31,15 @@ import DocsRetryStrategy from './pages/docs/retry-strategy'
 import DocsApiGuard from './pages/docs/api-guard'
 import DocsApiForge from './pages/docs/api-forge'
 import DocsConcepts from './pages/docs/concepts'
+import DocsSemanticClampVsStrict from './pages/docs/semantic-clamp-vs-strict'
+import DocsStreamSuppression from './pages/docs/stream-suppression'
+import DocsTelemetryReferenceV030 from './pages/docs/telemetry-reference-v030'
+import DocsCustomTools from './pages/docs/custom-tools'
+import DocsDeterministicToolLoops from './pages/docs/deterministic-tool-loops'
+import DocsFailoverStrategies from './pages/docs/failover-strategies'
+import DocsMessageStandard from './pages/docs/message-standard'
+import DocsNativeOptionsPattern from './pages/docs/native-options-pattern'
+import DocsAdapterSpecifics from './pages/docs/adapter-specifics'
 import DocsPerformance from './pages/docs/performance'
 import DocsEnvironments from './pages/docs/environments'
 import DocsTroubleshooting from './pages/docs/troubleshooting'
@@ -64,6 +73,15 @@ export default function App() {
           <Route path="/docs/api-guard" element={<DocsLayout><DocsApiGuard /></DocsLayout>} />
           <Route path="/docs/api-forge" element={<DocsLayout><DocsApiForge /></DocsLayout>} />
           <Route path="/docs/concepts" element={<DocsLayout><DocsConcepts /></DocsLayout>} />
+          <Route path="/docs/semantic-clamp-vs-strict" element={<DocsLayout><DocsSemanticClampVsStrict /></DocsLayout>} />
+          <Route path="/docs/stream-suppression" element={<DocsLayout><DocsStreamSuppression /></DocsLayout>} />
+          <Route path="/docs/telemetry-reference-v030" element={<DocsLayout><DocsTelemetryReferenceV030 /></DocsLayout>} />
+          <Route path="/docs/custom-tools" element={<DocsLayout><DocsCustomTools /></DocsLayout>} />
+          <Route path="/docs/deterministic-tool-loops" element={<DocsLayout><DocsDeterministicToolLoops /></DocsLayout>} />
+          <Route path="/docs/failover-strategies" element={<DocsLayout><DocsFailoverStrategies /></DocsLayout>} />
+          <Route path="/docs/message-standard" element={<DocsLayout><DocsMessageStandard /></DocsLayout>} />
+          <Route path="/docs/native-options-pattern" element={<DocsLayout><DocsNativeOptionsPattern /></DocsLayout>} />
+          <Route path="/docs/adapter-specifics" element={<DocsLayout><DocsAdapterSpecifics /></DocsLayout>} />
           <Route path="/docs/performance" element={<DocsLayout><DocsPerformance /></DocsLayout>} />
           <Route path="/docs/environments" element={<DocsLayout><DocsEnvironments /></DocsLayout>} />
           <Route path="/docs/troubleshooting" element={<DocsLayout><DocsTroubleshooting /></DocsLayout>} />

@@ -9,25 +9,130 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] - 2026-03-13
 
-### Added
+### Breaking Changes (Explicit Warning)
+
+- This release contains API-shape changes that may require updates for users migrating from `v0.1.x`.
+- We are shipping under `v0.3.0` (still pre-1.0), but these changes are semantically breaking and are documented in the migration guide below.
+
+### Core (Guard Layer)
+
+#### Added
 
 - **Line-aware retry prompts** - `guard()` now supports `retryPrompt.mode = "line-aware"` to include only relevant line windows for parse/validation failures, with multi-issue block grouping and configurable context radius.
 - **Retry prompt customization hooks** - Added `retryPromptStrategy` for full custom retry prompt generation while preserving typed context inputs.
 - **Guard profiles and heuristic controls** - Added `profile` (`safe` | `standard` | `aggressive`) and per-heuristic toggles in `GuardOptions`.
 - **Retry-context redaction controls** - Added `retryPrompt.redactPaths` and `retryPrompt.redactRegex` to prevent sensitive values from leaking into retry prompts.
 - **Optional debug artifacts** - Added `debug: true` support on `guard()` to expose extracted/repaired text, applied repair passes, likely parse line, and retry context blocks.
+- **Expanded semantic telemetry** - Added `status: "coerced_locally"` and `coercedPaths` reporting when semantic clamp resolves issues without network retries.
+
+#### Fixed
+
+- **Retry prompt context quality** - Parse and validation retries can now target specific lines instead of broad snippets when line-aware mode is enabled.
+
+### Providers Layer
+
+#### Added
+
+- **Adapter surface expansion** - Dedicated adapter exports now include `openrouter`, `groq`, and `together` in addition to existing provider factories.
+- **Native options pass-through model** - Provider adapters preserve native SDK option typing for direct pass-through into provider calls.
+
+#### Fixed
+
+- **OpenAI-compatible adapter response extraction** - `openaiCompatible()` now handles additional OpenAI-compatible response shapes and no longer throws a `TypeError` when `choices` is missing; it returns a controlled empty-response error instead.
+
+### Orchestration Layer
+
+#### Added
+
 - **Forge retry policy controls** - Added `retryPolicy` with `shouldRetry`, per-attempt `mutateProviderOptions`, and overrideable retry count.
 - **Structured forge events** - Added `onEvent` stream with attempt lifecycle events for observability.
 - **Provider fallback orchestration** - Added `forgeWithFallback()` for ordered provider failover with per-provider attempt budgets.
+- **Deterministic tool loop controls** - Added explicit tool-loop options (`tools`, `toolTimeoutMs`, `maxAgentIterations`) to harden agentic execution.
+- **Stream callback for UI-safe output** - Added `onChunk` callback for incremental user-facing streaming.
 
-### Changed
+#### Changed
 
 - **`forge()` now forwards guard options** - Added `guardOptions` pass-through for consistent retry prompt behavior in provider orchestration flows.
 
-### Fixed
+### Migration Guide (v0.1.x -> v0.3.0+)
 
-- **Retry prompt context quality** - Parse and validation retries can now target specific lines instead of broad snippets when line-aware mode is enabled.
-- **OpenAI-compatible adapter response extraction** - `openaiCompatible()` now handles additional OpenAI-compatible response shapes and no longer throws a `TypeError` when `choices` is missing; it returns a controlled empty-response error instead.
+#### 1. Message Format: from plain string-only to universal multi-modal content
+
+Old pattern (`v0.1.x` style):
+
+```ts
+const messages = [
+  { role: 'user', content: 'Return JSON for this order.' },
+];
+```
+
+New pattern (`v0.3.0+`):
+
+```ts
+import type { Message } from 'reforge-ai';
+
+const messages: Message[] = [
+  {
+    role: 'user',
+    content: [
+      { type: 'text', text: 'Return JSON for this order.' },
+      { type: 'image_url', image_url: { url: 'https://cdn.example.com/order.png', detail: 'high' } },
+    ],
+  },
+];
+```
+
+Also supported in `v0.3.0+`:
+- `assistant` messages with `toolCalls`
+- `tool` messages with `toolResponse`
+- provider-normalized tool histories across OpenAI-compatible, Anthropic, and Gemini adapters
+
+#### 2. Provider Options: from generic call options to typed native pass-through (`TNativeOptions`)
+
+Old pattern (`v0.1.x` / early `forge` usage):
+
+```ts
+await forge(provider, messages, schema, {
+  providerOptions: {
+    // loosely typed generic options
+    temperature: 0.2,
+  },
+});
+```
+
+New pattern (`v0.3.0+`):
+
+```ts
+import OpenAI from 'openai';
+import { openaiCompatible } from 'reforge-ai/openai-compatible';
+
+const provider = openaiCompatible(new OpenAI(), 'gpt-4o');
+
+await forge(provider, messages, schema, {
+  providerOptions: {
+    // strongly typed native OpenAI-compatible options
+    temperature: 0.2,
+    top_p: 0.95,
+    response_format: { type: 'json_object' },
+  },
+  retryPolicy: {
+    mutateProviderOptions: (attempt, base) => ({
+      ...(base ?? {}),
+      temperature: attempt > 1 ? 0 : 0.2,
+    }),
+  },
+});
+```
+
+#### 3. Guard Option Surface: new controls to opt in explicitly
+
+If you migrated from early `guard()` usage, consider these new options:
+
+- `profile` and `heuristics` for repair aggressiveness control
+- `retryPrompt.mode = 'line-aware'` for targeted retry context
+- `retryPrompt.redactPaths` / `retryPrompt.redactRegex` for sensitive data controls
+- `semanticResolution.mode = 'clamp'` for local semantic coercion before retrying
+- `debug: true` for extracted/repaired text and retry-context artifacts
 
 ## [0.2.1] - 2026-03-13
 

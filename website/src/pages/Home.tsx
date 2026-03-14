@@ -39,6 +39,8 @@ const providers: { name: string; icon?: React.ComponentType<{ className?: string
   { name: 'Perplexity', icon: SiPerplexity },
   { name: 'Fireworks' },
   { name: 'LM Studio' },
+  { name: 'vLLM' },
+  { name: 'Vertex AI' },
 ]
 
 /* ── Code snippets ──────────────────────────────────────── */
@@ -164,15 +166,16 @@ export default function Home() {
           </div>
 
           <h1 className="glow-text text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-            The intelligent{' '}
-            <span className="text-primary">semantic validation layer</span>
-            {' '}for your LLM agents.
+            The{' '}
+            <span className="text-primary">agentic orchestration engine</span>
+            {' '}for reliable structured AI.
           </h1>
 
-          <p className="mx-auto mt-6 max-w-[660px] text-base leading-relaxed text-muted-foreground sm:text-lg">
-            Reforge enforces both syntax and business constraints: native JSON repair,
-            semantic clamp or retry strategies, deterministic tool loops, and explicit model
-            fallback orchestration across OpenAI, Anthropic, Google, OpenRouter, Groq, and Together.
+          <p className="mx-auto mt-6 max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            Reforge turns probabilistic model outputs into deterministic system behavior.
+            Use a universal multi-modal message standard, run local semantic clamp without network cost,
+            execute exception-safe tool loops,
+            stream clean UI chunks, and fail over automatically when providers hit intrinsic failures.
           </p>
 
           {/* CTAs */}
@@ -247,6 +250,111 @@ export default function Home() {
               >
                 View package
               </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Phase 4 Feature Grid ───────────────────── */}
+      <section className="border-t border-border/40 px-4 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-10 text-center">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">
+              Phase 4 Orchestration
+            </p>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              Control plane features built for production loops
+            </h2>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              {
+                title: 'Circuit Breaker',
+                desc: 'Hard-stop endless tool recursion with maxAgentIterations and timeout boundaries.',
+                code: 'maxAgentIterations + toolTimeoutMs',
+              },
+              {
+                title: 'Multi-hop Telemetry',
+                desc: 'Separate network latency, tool execution time, attempt details, and provider hops.',
+                code: 'networkDurationMs vs toolExecutionDurationMs',
+              },
+              {
+                title: 'Deterministic Tool Loops',
+                desc: 'Validate args, execute execute(args), convert tool crashes into safe tool-error feedback, and continue deterministically.',
+                code: 'while(tool_calls) => resolve => continue',
+              },
+              {
+                title: 'Native Options Bypass',
+                desc: 'Pass provider-native SDK options through forge without abstraction lock-in.',
+                code: 'providerOptions: TNativeOptions',
+              },
+            ].map((f, idx) => (
+              <div
+                key={f.title}
+                className="group rounded-xl border border-border/40 bg-card/40 p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-card"
+                style={{ animationDelay: `${idx * 70}ms` }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary/80">{f.title}</p>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{f.desc}</p>
+                <code className="mt-4 block rounded-md border border-border/40 bg-muted/50 px-2 py-1 text-[11px] text-foreground/80">
+                  {f.code}
+                </code>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Visual Flows ───────────────────────────── */}
+      <section className="border-t border-border/40 px-4 py-20 sm:px-6 sm:py-28">
+        <div className="mx-auto max-w-7xl space-y-12">
+          <div className="text-center">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">
+              System Flows
+            </p>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              Semantic clamp and fallback, visualized
+            </h2>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="rounded-xl border border-border/50 bg-card/40 p-6">
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary/80">Flow 1</p>
+              <h3 className="mt-2 text-lg font-semibold text-foreground">Semantic Clamp (Local, Zero Network Cost)</h3>
+              <div className="mt-5 grid gap-3">
+                {[
+                  'Model emits age: 154 for max(100)',
+                  'guard() validates and detects too_big',
+                  'clamp mode applies local semantic coercion',
+                  'status becomes coerced_locally + coercedPaths',
+                  'App receives corrected object immediately',
+                ].map((step, i) => (
+                  <div key={step} className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/30 px-3 py-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{i + 1}</span>
+                    <span className="text-sm text-muted-foreground">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-card/40 p-6">
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary/80">Flow 2</p>
+              <h3 className="mt-2 text-lg font-semibold text-foreground">Failover Cascade (Network Failure Recovery)</h3>
+              <div className="mt-5 grid gap-3">
+                {[
+                  'Primary provider returns intrinsic 429',
+                  'forge() classifies it as network-level failure',
+                  'Provider chain advances to fallback immediately',
+                  'Fallback model returns valid response',
+                  'Telemetry records provider hop and total attempts',
+                ].map((step, i) => (
+                  <div key={step} className="flex items-center gap-3 rounded-lg border border-border/40 bg-muted/30 px-3 py-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">{i + 1}</span>
+                    <span className="text-sm text-muted-foreground">{step}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -330,7 +438,7 @@ export default function Home() {
                 New in v0.2
               </p>
               <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                End-to-End with forge()
+                Orchestration Loop with forge()
               </h2>
               <p className="mt-4 max-w-lg text-muted-foreground leading-relaxed">
                 One function replaces the manual retry loop. <code className="rounded border border-border/40 bg-muted/50 px-1.5 py-0.5 font-mono text-[13px]">forge()</code> calls

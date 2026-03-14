@@ -44,13 +44,20 @@ const docNav: DocCategory[] = [
     title: 'Guides',
     items: [
       { slug: 'provider-adapters', label: 'Provider Adapters', icon: Wrench },
+      { slug: 'adapter-specifics', label: 'Adapter Specifics', icon: Wrench },
       { slug: 'openai', label: 'OpenAI', icon: Wrench },
       { slug: 'openrouter', label: 'OpenRouter', icon: Wrench },
       { slug: 'anthropic', label: 'Anthropic', icon: Wrench },
       { slug: 'google', label: 'Google Gemini', icon: Wrench },
+      { slug: 'native-options-pattern', label: 'Native Options Pattern', icon: Wrench },
+      { slug: 'message-standard', label: 'Message Standard', icon: Layers },
       { slug: 'custom-provider', label: 'Custom Provider', icon: Wrench },
+      { slug: 'custom-tools', label: 'Custom Tools', icon: Wrench },
+      { slug: 'deterministic-tool-loops', label: 'Deterministic Tool Loops', icon: RotateCcw },
+      { slug: 'failover-strategies', label: 'Failover Strategies', icon: RotateCcw },
       { slug: 'edge-runtime', label: 'Edge Runtime', icon: Globe },
       { slug: 'retry-strategy', label: 'Retry Strategy', icon: RotateCcw },
+      { slug: 'stream-suppression', label: 'Streaming Suppression', icon: Zap },
     ],
   },
   {
@@ -58,6 +65,8 @@ const docNav: DocCategory[] = [
     items: [
       { slug: 'api-guard', label: 'guard() API', icon: Shield },
       { slug: 'api-forge', label: 'forge() API', icon: Shield },
+      { slug: 'semantic-clamp-vs-strict', label: 'Clamp vs Strict', icon: Shield },
+      { slug: 'telemetry-reference-v030', label: 'Telemetry v0.3.0', icon: BarChart3 },
     ],
   },
   {

@@ -1,225 +1,85 @@
----
-description: This file describes the master plan and guidelines for the project. All information about the project should be included here.
-applyTo: **
----
+# Post-Implementation Audit & Review (Extended Audit)
 
-# Reforge Master Specification
-
-## 1. Project Overview & Product Thesis
-
-**Name:** reforge
-
-**Tagline:** Raw LLM output reforged into clean data.
-
-**The Problem:** LLMs are probabilistic and frequently output malformed JSON (markdown wrappers, trailing commas, unquoted keys, truncated outputs). Developers must manually integrate with each provider's SDK, handle retries themselves, and deal with different response formats across OpenAI, Anthropic, Google, OpenRouter, and dozens more.
-
-**The Solution:** A zero-dependency TypeScript library with an optional provider layer. The core `guard()` function natively repairs syntactical errors in microseconds and strictly enforces semantic types via Zod. The `forge()` function provides end-to-end structured output: call any LLM provider → guard → auto-retry — with a single unified API.
+Based on a deep audit of the last 8 commits (`v0.2.x` through `v0.3.0` feature sets), this extended report details inconsistencies across the entire platform, missing documentation for newly shipped library features, bugs in the presentation layer, and a strategy for overhauling the website to reflect the actual scale of the product.
 
 ---
 
-## 2. The SDK (reforge)
+## 1. The Disconnect: Shipped Code vs. Documentation
 
-### 2.1 Core Constraints
+We have shipped a massive infrastructure overhaul, but the documentation (`website/src/pages/docs/`) and the homepage fail to communicate the majority of it. Below is an exhaustive list of features that exist in the library but are **undocumented or poorly explained on the website**.
 
-- **Zero Dependencies (core):** The core `guard()` function has strictly zod as a peer/optional dependency. No lodash, no heavy AST parsers.
-- **Provider SDKs are Peer Dependencies:** Provider adapters (openai, anthropic, google) import the user's installed SDK. They are never bundled.
-- **Environment Agnostic:** Must run in Node.js, Cloudflare Workers, Vercel Edge, Bun, Deno, and the Browser. Do not use Node-specific APIs (fs, path, Buffer).
-- **Performance Bound:** The `guard()` function must execute in under 5ms for a 2KB string. The `forge()` function is async (network-bound) but adds negligible overhead beyond the LLM call itself.
-- **No Global State:** All functions are pure or accept explicit configuration. No singletons, no module-level mutation.
+### A. Foundational Upgrades (Phase 1)
+*   **The `TNativeOptions` Pattern:** We abandoned the restrictive `ProviderCallOptions` to allow true, type-safe propagation of native SDK configurations. 
+    *   *Missing Docs:* We do not show users how they can now pass exact `Omit<OpenAICreateParams>` or Anthropic configurations directly through `forge()`.
+*   **Universal `Message` Schema:** The standard `content: string` was upgraded to support full multi-modal blocks and normalized tool invocation histories.
+    *   *Missing Docs:* No page explains how to construct images using the new standard or how Reforge normalizes tool history across platforms.
+*   **Agentic `ReforgeTool` primitive:** We shipped a strict JavaScript callback interface paired with Zod schemas for tools.
+    *   *Missing Docs:* No dedicated "Custom Tools" documentation page explains the `execute(args)` callback, tool timeouts, or how they hook into `forge`.
 
-### 2.2 Architecture: Two Layers
+### B. Core Guard Engine & Semantic Coercion (Phase 2)
+*   **Semantic Clamping vs. Retries:** We introduced a complex semantic resolution mechanism (`clamp` vs `strict`).
+    *   *Missing Docs:* The docs only mention it superficially. There is no deep breakdown of *how* `clamp` handles specific Zod errors (e.g., `too_small`, `too_big`, `invalid_enum_value`) or how it safely modifies objects.
+*   **Expanded Telemetry:** Telemetry now returns `status: "coerced_locally"` and tracks `coercedPaths` strings, plus multi-hop network time vs tool execution time.
+    *   *Missing Docs:* The Telemetry docs/API reference are outdated and do not outline the new agentic tracking properties.
 
-```
-┌─────────────────────────────────────────────────┐
-│  forge() — End-to-end structured LLM output     │  ← NEW (async, optional)
-│  Provider Adapters (OpenAI, Anthropic, Google)   │
-├─────────────────────────────────────────────────┤
-│  guard() — Core repair + validation engine       │  ← EXISTING (sync, zero-dep)
-│  Dirty Parser → Zod Validation → Telemetry       │
-└─────────────────────────────────────────────────┘
-```
-
-**Layer 1 (Core):** `guard()` — synchronous, zero-dependency, pure string → validated data. Already built and shipped as v0.1.0.
-
-**Layer 2 (Providers):** `forge()` — async, wraps provider SDK calls with `guard()` and automatic retry loops. Requires the user's provider SDK as a peer dependency.
-
-### 2.3 Existing Core Features (guard)
-
-These are built and stable. Do not break them.
-
-- **Dirty Parser:** Markdown extraction, stack-based bracket balancing, heuristic fixes (trailing commas, unquoted keys, escaped quotes, single quotes).
-- **Semantic Enforcement:** Zod `.safeParse()` with automatic type coercion (string→boolean, string→number, string→null).
-- **Retry Prompt Generator:** Token-efficient retry prompt with mapped Zod issues.
-- **Telemetry:** `{ durationMs, status: 'clean' | 'repaired_natively' | 'failed' }`.
-
-### 2.4 New Feature: Provider Adapters & forge()
-
-**Provider Adapter Interface:**
-
-```typescript
-interface ReforgeProvider {
-  call(messages: Message[], options?: ProviderCallOptions): Promise<string>;
-}
-```
-
-Each adapter implements this interface by wrapping the respective SDK's chat completion call and extracting the text content from the response.
-
-**Built-in Adapters:**
-
-| Adapter | Covers | Peer Dependency |
-|---------|--------|-----------------|
-| `openai()` | OpenAI, OpenRouter, Together, Groq, Fireworks, Perplexity, Ollama, LM Studio, vLLM, any OpenAI-compatible API | `openai` |
-| `anthropic()` | Direct Anthropic API | `@anthropic-ai/sdk` |
-| `google()` | Google Gemini / Vertex AI | `@google/generative-ai` |
-
-The OpenAI adapter works with ANY OpenAI-compatible provider because the user passes their own pre-configured client (with custom `baseURL` and API key already set). Reforge never manages credentials.
-
-**The `forge()` Function:**
-
-```typescript
-async function forge<T extends z.ZodTypeAny>(
-  provider: ReforgeProvider,
-  messages: Message[],
-  schema: T,
-  options?: ForgeOptions
-): Promise<ForgeResult<z.infer<T>>>
-```
-
-**Behavior:**
-1. Calls the provider with the user's messages
-2. Pipes the raw response string through `guard()`
-3. If `guard()` succeeds → return the validated data
-4. If `guard()` fails → append the `retryPrompt` to messages, call the provider again
-5. Repeat up to `maxRetries` (default: 3)
-6. If all retries exhausted → return failure with accumulated errors
-
-**Custom Providers:** Users can implement `ReforgeProvider` directly for any provider not covered by built-ins. This is a single method interface — trivial to implement.
-
-### 2.5 Export Structure
-
-```
-reforge-ai                    # Core (guard, types) — zero deps
-reforge-ai/openai             # OpenAI adapter — peer: openai
-reforge-ai/anthropic          # Anthropic adapter — peer: @anthropic-ai/sdk
-reforge-ai/google             # Google adapter — peer: @google/generative-ai
-```
-
-Each sub-path export is tree-shakeable. Users who only use `guard()` import nothing extra.
-
-### 2.6 API Signatures (Complete)
-
-```typescript
-// ── Core (existing) ──
-export function guard<T extends z.ZodTypeAny>(
-  llmOutput: string,
-  schema: T
-): GuardResult<z.infer<T>>
-
-export type GuardResult<T> =
-  | { success: true; data: T; telemetry: TelemetryData; isRepaired: boolean }
-  | { success: false; retryPrompt: string; errors: z.ZodIssue[]; telemetry: TelemetryData };
-
-export type TelemetryData = { durationMs: number; status: 'clean' | 'repaired_natively' | 'failed' };
-
-// ── Provider Layer (new) ──
-export interface ReforgeProvider {
-  call(messages: Message[], options?: ProviderCallOptions): Promise<string>;
-}
-
-export interface Message {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-export interface ForgeOptions {
-  maxRetries?: number;         // Default: 3
-  providerOptions?: ProviderCallOptions;
-}
-
-export interface ProviderCallOptions {
-  temperature?: number;
-  maxTokens?: number;
-  [key: string]: unknown;      // Pass-through for provider-specific options
-}
-
-export type ForgeResult<T> =
-  | { success: true; data: T; telemetry: ForgeTelemetry; isRepaired: boolean }
-  | { success: false; errors: z.ZodIssue[]; telemetry: ForgeTelemetry };
-
-export interface ForgeTelemetry extends TelemetryData {
-  attempts: number;
-  totalDurationMs: number;
-}
-
-// ── Adapter factories (new) ──
-export function openai(client: OpenAIClient, model: string): ReforgeProvider;
-export function anthropic(client: AnthropicClient, model: string): ReforgeProvider;
-export function google(client: GoogleClient, model: string): ReforgeProvider;
-```
+### C. Provider Splits & Orchestration (Phase 3 & 4)
+*   **Explicit Adapter Behaviors:** We built specific adapters for `openrouter`, `groq`, and `together` outside the main `openai-compatible` adapter.
+    *   *Missing Docs:* There are no standalone examples for OpenRouter routing headers or Groq-specific system prompt handling. Users don't know Anthropic `cache_control` blocks are now supported or how Google Gemini `safetySettings` map over.
+*   **Deterministic Circuit Breaking:** `forge` now runs a stateful `while(requiresResolution)` loop with a strict `maxAgentIterations` circuit breaker.
+    *   *Missing Docs:* We are failing to explicitly state that our agent loops are completely exception-safe. We need to document how `forge` intercepts tool crashes, catches the error, and feeds it safely back to the LLM. 
+*   **Provider Fallback Prioritization:** Passing `[ProviderA, ProviderA_Fallback]` triggers specific failovers based on network 500s/429s, but traps active providers during semantic retries. 
+    *   *Missing Docs:* We need a dedicated "Failover Strategies" page explicitly explaining the priority rules for semantic/logical failures vs intrinsic network failures.
+*   **Stream Suppression:** Added `onChunk` for front-end streaming that suppresses messy JSON tool outputs. 
+    *   *Missing Docs:* UI developers must know about this API. Zero documentation currently.
 
 ---
 
-## 3. The Web Platform (Marketing, Demo, Docs, Blog)
+## 2. Website & Marketing Copy Inconsistencies (Issues 1 & 5)
 
-### 3.1 Tech Stack
-
-- **Framework:** Vite + React (SPA).
-- **Styling:** Tailwind CSS v4.
-- **Routing:** react-router-dom.
-- **Hosting:** Firebase Hosting.
-- **Demo:** Client-side — imports the actual library, runs `guard()` in the browser.
-
-### 3.2 Landing Page
-
-- **Hero Section:** "Stop paying for LLM retries." with code snippet showing `guard()` and `forge()`.
-- **Value Prop Grid:** Zero dependencies, Edge-ready, Zod native, Microsecond latency, Any LLM Provider.
-- **Interactive Demo:** Split-screen with dirty input → repaired output + telemetry.
-- **Provider Showcase:** Visual grid showing all supported providers (OpenAI, Anthropic, Google, OpenRouter, Groq, Together, etc.) with a single unified API.
-
-### 3.3 Documentation Hub
-
-- **Setup Guide:** NPM/Yarn/PNPM install instructions.
-- **Concepts:** Dirty Parser, Semantic Validation, Provider Adapters.
-- **API Reference:** `guard()`, `forge()`, adapter factories, types.
-- **Cookbooks/Examples:**
-  - OpenAI direct integration.
-  - Anthropic direct integration.
-  - Google Gemini integration.
-  - OpenRouter (using OpenAI adapter with custom baseURL).
-  - Custom provider implementation.
-  - Next.js Edge API Route.
-  - Retry strategy patterns.
-
-### 3.4 SEO Blog
-
-- "How to enforce JSON schemas with OpenAI in 2026."
-- "Why JSON Schema prompts fail: The case for native repair."
-- "Zod vs. LLMs: Building resilient agentic pipelines."
+*   **Hero Section Clutter:** The hero text previously listed providers directly ("OpenAI, Anthropic, Google..."). This is redundant since there is a logo grid right below it, and it undersells the scale (we now have native splits for 10+ providers).
+*   **Failing to Sell "The New Reforge":** The current homepage still positions the library primarily as a "JSON syntax fixer." 
+    *   *The Opportunity:* Reforge is now an **Agentic AI Orchestrator & Semantic Enforcement Engine**. The homepage needs to highlight:
+        *   True Native Options without vendor lock-in.
+        *   Zero-Config Model Failovers.
+        *   Deterministic Tool Execution Loops.
+*   **Recommendation for Homepage UI Revamp:** 
+    *   Create a "Features Grid" specifically dedicated to the Phase 4 Orchestration additions.
+    *   Add a visual visualization flow showing an LLM hallucinating out of bounds -> clamped locally (no network cost).
+    *   Add a diagram showing a fallback from Claude to OpenAI when a network error hits. 
 
 ---
 
-## 4. Current State & What's Next
+## 3. The "Identical Strings" Bug in Semantic Clamp (Issue 2)
 
-### Completed (v0.1.0)
+*   **Root Cause:** This is an architectural side-effect in the demo/debug payload. The `debug.repairedText` string is generated during **Stage 1 (Dirty Parsing)**. Since the `semanticClamp` demo preset provides syntactically *valid* JSON (e.g., `{"age": 154}`), Stage 1 makes no repairs. 
+*   **The Problem:** The actual semantic coercion happens downstream in **Stage 2 (Validation/Semantic Resolution)** where the JS object is modified in memory (clamping `154` to `100`). However, `guard.ts` doesn't stringify the clamped object back into `debug.repairedText`. Therefore, the Demo UI renders identical extracted and repaired strings. The user rightfully thinks "nothing happened".
+*   **Recommended Fix:** Inside `src/guard.ts`, if `semanticMode === "clamp"` is invoked and `coercion.appliedPaths.length > 0`, explicitly re-stringify the object:  
+    `repairedText: JSON.stringify(secondPass.data, null, 2)`  
+    This guarantees the Demo UI reflects the final clamped data state.
 
-- Core `guard()` function with full dirty parser pipeline
-- Zod validation with type coercion
-- Retry prompt generator
-- Telemetry
-- 100% test coverage (Vitest)
-- Published to NPM as `reforge-ai`
-- Website live: landing page, interactive demo, docs, blog
+---
 
-### Next: Provider Layer (v0.2.0)
+## 4. Large JSON Example Requirement (Issue 4)
 
-Detailed task breakdown is in `.internal/plans.md` (not tracked in git). High-level:
+*   **Missing Depth:** To physically prove the "microseconds latency" bound claim of the `guard()` dirty-parser stack, the current examples are too small. The largest is `product` (~50 lines).
+*   **Recommendation:** Create a massive, gnarly ~150-200 line `enterpriseDashboard` or `crmExport` preset in `demo-presets.ts`. This preset must include arrays of objects, deep nesting, deliberately broken trailing commas, stripped quotes, and several semantic violations waiting to be clamped. This makes for a perfect benchmark demonstration.
 
-1. Define provider interfaces and types (`src/providers/types.ts`)
-2. Implement `forge()` orchestrator with retry loop (`src/providers/forge.ts`)
-3. Build OpenAI adapter (`src/providers/openai.ts`)
-4. Build Anthropic adapter (`src/providers/anthropic.ts`)
-5. Build Google Gemini adapter (`src/providers/google.ts`)
-6. Configure sub-path exports in package.json and tsup
-7. Full test coverage for all adapters and forge()
-8. Update website: docs, demo examples, provider showcase
-9. Publish v0.2.0 to NPM
+---
+
+## 5. CHANGELOG & Semantic Versioning Errors (Issue 6)
+
+*   **The Problem:** The current CHANGELOG layout misses the gravity of what breaks between minor/patch versions. The refactoring of `ProviderCallOptions`, how `Message` arrays handle tool structures, and how `guardOptions` interface changed are highly likely to break code written for `v0.1.x`.
+*   **Action Required:**
+    1.  Ensure semantic versioning was applied appropriately (if fundamental types changed, this implies a major version bump `v1.0.0` or explicit warning under `v0.3.0`).
+    2.  Write a **"Migration Guide"** section directly inside the CHANGELOG. Detailed instructions on migrating from the old basic `Message` format to the multi-modal compliant syntax.
+    3.  Organize changes explicitly into "Core (Guard)", "Providers Layer", and "Orchestration Layer" so users understand the sub-packages they are importing.
+
+---
+
+## Summary of Execution Plan for Next Dev Phase:
+
+1.  **Docs Overhaul:** Draft 5+ new `.tsx` doc modules addressing: Tools, Multi-modal standard, Options Passthrough, Fallback handling, and the Circuit Breaker.
+2.  **Home Page Revamp:** Update primary headlines and marketing copy to pitch the macro-orchestrator loop alongside the core JSON feature.
+3.  **Code (Debug Fix):** Fix `debug.repairedText` hydration in `guard.ts` during semantic clamp mode to ensure Demo fidelity.
+4.  **Content (Demo Scale):** Scaffold out the ~150 line JSON demo preset for performance display purposes.
+5.  **Changelog Reconstruction:** Redo the `CHANGELOG.md` entry for v0.3.0+ to include breaking change warnings and specific migration snippets for API differences.
