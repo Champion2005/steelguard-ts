@@ -112,7 +112,7 @@ describe("generateRetryPrompt", () => {
     ];
     const prompt = generateRetryPrompt(errors);
     expect(prompt).toContain("Path: /email");
-    expect(prompt).toContain("Message: Invalid email format");
+    expect(prompt).toContain("Constraint: Invalid email format");
   });
 
   it("produces a reasonably token-efficient prompt", () => {
@@ -197,5 +197,40 @@ describe("generateRetryPrompt", () => {
     });
 
     expect(prompt).toBe("CUSTOM-RETRY-PROMPT");
+  });
+
+  it("formats too_big constraints in natural-language form", () => {
+    const errors: z.ZodIssue[] = [
+      {
+        code: "too_big",
+        maximum: 100,
+        inclusive: true,
+        exact: false,
+        type: "number",
+        path: ["score"],
+        message: "Number must be less than or equal to 100",
+      },
+    ];
+
+    const prompt = generateRetryPrompt(errors);
+    expect(prompt).toContain("Path: /score");
+    expect(prompt).toContain("must be at most 100");
+  });
+
+  it("formats invalid enum constraints with allowed values", () => {
+    const errors: z.ZodIssue[] = [
+      {
+        code: "invalid_enum_value",
+        options: ["active", "inactive"],
+        received: "paused",
+        path: ["status"],
+        message: "Invalid enum value",
+      },
+    ];
+
+    const prompt = generateRetryPrompt(errors);
+    expect(prompt).toContain("Path: /status");
+    expect(prompt).toContain('"active"');
+    expect(prompt).toContain('"inactive"');
   });
 });

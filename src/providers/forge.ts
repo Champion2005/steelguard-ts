@@ -120,10 +120,7 @@ export async function forge<
       options?.onEvent?.({
         kind: "guard_success",
         attempt,
-        status:
-          result.telemetry.status === "clean"
-            ? "clean"
-            : "repaired_natively",
+        status: result.telemetry.status,
         durationMs: result.telemetry.durationMs,
       });
 

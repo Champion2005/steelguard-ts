@@ -98,7 +98,7 @@ export type ForgeEvent =
   | {
       kind: "guard_success";
       attempt: number;
-      status: "clean" | "repaired_natively";
+      status: "clean" | "repaired_natively" | "coerced_locally";
       durationMs: number;
     }
   | {
@@ -160,7 +160,7 @@ export interface ForgeFallbackOptions {
 export interface ForgeAttemptDetail {
   attempt: number;
   durationMs: number;
-  status: "clean" | "repaired_natively" | "failed";
+  status: "clean" | "repaired_natively" | "coerced_locally" | "failed";
 }
 
 export interface ForgeProviderHop {

@@ -15,7 +15,8 @@ import type { ZodIssue } from "zod";
  */
 export interface TelemetryData {
   durationMs: number;
-  status: "clean" | "repaired_natively" | "failed";
+  status: "clean" | "repaired_natively" | "coerced_locally" | "failed";
+  coercedPaths?: string[];
 }
 
 export interface RetryPromptContextBlock {
@@ -60,7 +61,24 @@ export interface GuardOptions {
   heuristics?: Partial<GuardHeuristicOptions>;
   retryPrompt?: RetryPromptOptions;
   retryPromptStrategy?: RetryPromptStrategy;
+  semanticResolution?: GuardSemanticResolution;
   debug?: boolean;
+}
+
+export interface GuardSemanticResolutionInput {
+  path: (string | number)[];
+  issue: ZodIssue;
+  currentValue: unknown;
+}
+
+export type GuardSemanticResolver = (
+  input: GuardSemanticResolutionInput,
+) => unknown;
+
+export interface GuardSemanticResolution {
+  mode?: "retry" | "clamp";
+  pathDefaults?: Record<string, unknown>;
+  resolver?: GuardSemanticResolver;
 }
 
 export interface GuardDebugArtifacts {

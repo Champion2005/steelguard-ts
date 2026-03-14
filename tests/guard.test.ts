@@ -297,4 +297,51 @@ Let me know if you need anything else!`;
       expect(r.retryPrompt).toBe("CUSTOM-STRATEGY");
     }
   });
+
+  it("keeps semantic failures in retry mode by default", () => {
+    const schema = z.object({ age: z.number().min(18).max(99) });
+    const r = guard('{"age": 150}', schema);
+
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.telemetry.status).toBe("failed");
+      expect(r.retryPrompt).toContain("must be at most 99");
+    }
+  });
+
+  it("supports semantic clamp mode and reports coerced paths", () => {
+    const schema = z.object({ age: z.number().min(18).max(99) });
+    const r = guard('{"age": 150}', schema, {
+      semanticResolution: { mode: "clamp" },
+    });
+
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.age).toBe(99);
+      expect(r.telemetry.status).toBe("coerced_locally");
+      expect(r.telemetry.coercedPaths).toEqual(["age"]);
+    }
+  });
+
+  it("supports pathDefaults fallback in semantic clamp mode", () => {
+    const schema = z.object({
+      status: z.enum(["active", "inactive"]),
+    });
+
+    const r = guard('{"status": "unknown"}', schema, {
+      semanticResolution: {
+        mode: "clamp",
+        pathDefaults: {
+          "/status": "inactive",
+        },
+      },
+    });
+
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.status).toBe("inactive");
+      expect(r.telemetry.status).toBe("coerced_locally");
+      expect(r.telemetry.coercedPaths).toEqual(["status"]);
+    }
+  });
 });

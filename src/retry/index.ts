@@ -184,6 +184,25 @@ export function generateRetryPrompt(
 function formatIssue(issue: ZodIssue): string {
   const path = "/" + issue.path.map(String).join("/");
 
+  if (issue.code === "too_small") {
+    const comparator = issue.inclusive ? "at least" : "greater than";
+    return `[Path: ${path}, Constraint: must be ${comparator} ${String(issue.minimum)}]`;
+  }
+
+  if (issue.code === "too_big") {
+    const comparator = issue.inclusive ? "at most" : "less than";
+    return `[Path: ${path}, Constraint: must be ${comparator} ${String(issue.maximum)}]`;
+  }
+
+  if (issue.code === "invalid_enum_value") {
+    const allowed = issue.options.map((v) => JSON.stringify(v)).join(", ");
+    return `[Path: ${path}, Constraint: must be one of: ${allowed}]`;
+  }
+
+  if (issue.code === "custom") {
+    return `[Path: ${path}, Constraint: ${issue.message}]`;
+  }
+
   // Build informative detail based on the issue code.
   const parts: string[] = [`Path: ${path}`];
 
