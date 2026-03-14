@@ -3,6 +3,14 @@ import { Calendar, Clock, ArrowRight } from 'lucide-react'
 
 export const blogPosts = [
   {
+    slug: 'guard-vs-forge',
+    title: 'When to use Forge vs. Guard: A Guide to Reforge-AI',
+    excerpt:
+      'Understanding the difference between the core guard() function and the end-to-end forge() orchestrator in Reforge, and when to use each for your LLM pipelines.',
+    date: 'March 14, 2026',
+    readingTime: '5 min read',
+  },
+  {
     slug: 'reforge-timing-benchmark-process-findings',
     title: 'How We Benchmarked Reforge End-to-End: Capture, Analysis, and Findings',
     excerpt:

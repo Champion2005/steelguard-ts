@@ -13,6 +13,7 @@ import ZodLlmsResilientPipelines from './pages/blog/zod-llms-resilient-pipelines
 import StructuredOutputAnyLLM from './pages/blog/structured-output-any-llm-typescript'
 import ReliableAIAgents from './pages/blog/reliable-ai-agents-retry-validation'
 import ReforgeTimingBenchmarkPost from './pages/blog/reforge-timing-benchmark-process-findings'
+import GuardVsForgePost from './pages/blog/guard-vs-forge'
 
 // Doc pages
 import DocsIntroduction from './pages/docs/introduction'
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/blog/structured-output-any-llm-typescript" element={<StructuredOutputAnyLLM />} />
           <Route path="/blog/reliable-ai-agents-retry-validation" element={<ReliableAIAgents />} />
           <Route path="/blog/reforge-timing-benchmark-process-findings" element={<ReforgeTimingBenchmarkPost />} />
+          <Route path="/blog/guard-vs-forge" element={<GuardVsForgePost />} />
         </Routes>
       </main>
       <Footer />
